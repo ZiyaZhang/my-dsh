@@ -67,7 +67,7 @@ export default class MyDsh extends TypertRemoteService {
     void this.loadSessions().catch(() => undefined); // a failure reaches the page through the next snapshot
   }
 
-  /** The one Remote method; the client mounts its descriptor (`MY_DSH_REMOTE`), the Gateway finds it through `@Remote`. */
+  /** Every board read and change; the client mounts its descriptor (`MY_DSH_REMOTE`), the Gateway finds it through `@Remote`. */
   @Remote
   async call(request: MyDshRequest, signal: AbortSignal): Promise<MyDshResponse> {
     signal.throwIfAborted();
