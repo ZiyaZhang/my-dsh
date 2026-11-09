@@ -157,7 +157,7 @@ export interface ActivityView extends ActivityEntry {
 
 /** A change to the matters that waits for the user's click. Names are kept as they were when it was proposed. */
 export type ProposalChange =
-  | { kind: 'new'; name: string; goal: string }
+  | { kind: 'new'; name: string; goal: string; workspaceId?: string }
   | { kind: 'merge'; fromId: string; fromName: string; intoId: string; intoName: string }
   | { kind: 'rename'; matterId: string; oldName: string; name: string };
 
@@ -306,7 +306,7 @@ function id(value: Record<string, unknown>, field: string): string {
 }
 
 /** Trimmed, one line, counted in characters as people see them. */
-function line(raw: string, label: string, min: number, max: number): string {
+export function line(raw: string, label: string, min: number, max: number): string {
   const trimmed = raw.trim();
   if (/\p{Cc}/u.test(trimmed)) throw new RequestError(`${label}只能写一行`);
   const length = [...trimmed].length;

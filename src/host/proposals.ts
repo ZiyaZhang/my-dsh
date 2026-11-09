@@ -23,15 +23,20 @@ export function proposalLine(change: ProposalChange): string {
 }
 
 /**
- * Apply an accepted proposal. A new matter gets `made.id`; the user's phrase, when there was one, becomes an alias of the matter that
- * results (a rename also keeps the old name, a merge the merged matter's name and aliases).
+ * Apply an accepted proposal. A new matter gets `made.id`, and the proposed main workspace or else `made.workspaceId`; the user's
+ * phrase, when there was one, becomes an alias of the matter that results (a rename also keeps the old name, a merge the merged
+ * matter's name and aliases).
  */
-export function applyProposal(matters: readonly Matter[], proposal: Proposal, made: { id: string; at: string }): Changed & { text: string } {
+export function applyProposal(matters: readonly Matter[], proposal: Proposal, made: { id: string; at: string; workspaceId?: string }): Changed & { text: string } {
   if (proposal.state !== 'pending') throw new RequestError('这个提议已经处理过了');
   const { change } = proposal;
   let changed: Changed;
   switch (change.kind) {
-    case 'new': changed = createMatter(matters, { name: change.name, goal: change.goal }, made); break;
+    case 'new': {
+      const workspaceId = change.workspaceId ?? made.workspaceId;
+      changed = createMatter(matters, { name: change.name, goal: change.goal, ...(workspaceId ? { workspaceId } : {}) }, made);
+      break;
+    }
     case 'merge': changed = mergeMatters(matters, change.fromId, change.intoId); break;
     case 'rename': changed = renameMatter(matters, change.matterId, change.name); break;
   }

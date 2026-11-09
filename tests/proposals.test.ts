@@ -101,3 +101,11 @@ test('stored proposals and questions keep only the newest', () => {
   assert.equal(kept.length, 300);
   assert.equal(kept[0]!.id, 'q-5');
 });
+
+test('a new matter takes the proposed main workspace, else the one given when it is accepted', () => {
+  const proposed = applyProposal(matters(), proposal({ kind: 'new', name: '看板', goal: '', workspaceId: 'w-kb' }), { id: 'm-new', at: T1, workspaceId: 'w-dsh' });
+  assert.equal(proposed.matter.workspaceId, 'w-kb');
+  const fallback = applyProposal(matters(), proposal({ kind: 'new', name: '看板', goal: '' }), { id: 'm-new', at: T1, workspaceId: 'w-dsh' });
+  assert.equal(fallback.matter.workspaceId, 'w-dsh');
+  assert.equal(applyProposal(matters(), proposal({ kind: 'new', name: '看板', goal: '' }), { id: 'm-new', at: T1 }).matter.workspaceId, undefined);
+});

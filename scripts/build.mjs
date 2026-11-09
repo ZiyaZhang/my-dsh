@@ -9,8 +9,9 @@ process.chdir(root);
 
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist/host', { recursive: true });
+// The Host plugin, and the my-dsh preset's own row, which the preset loads as `dsh-my-dsh/tools`.
 await build({
-  absWorkingDir: root, entryPoints: ['src/host/index.ts'], outfile: 'dist/host/index.js',
+  absWorkingDir: root, entryPoints: { index: 'src/host/index.ts', tools: 'src/host/tools.ts' }, outdir: 'dist/host',
   bundle: true, packages: 'external', platform: 'node', target: 'node22', format: 'esm', sourcemap: true,
 });
 const client = await build({

@@ -79,6 +79,11 @@ export class AssistantStore {
     return copy(this.current);
   }
 
+  /** The current state without a copy, for reads that do not keep it. */
+  peek(): Readonly<AssistantState> {
+    return this.current;
+  }
+
   /**
    * Apply one change and write the result. A change that throws leaves the state as it was, and the next change still runs.
    * @returns what the change reports.
