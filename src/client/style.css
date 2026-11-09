@@ -114,7 +114,8 @@ button.mydsh-crumb:hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* The dock: my dsh's conversation, about 42% of the page. Slot anchors are display: contents, so the conversation body is a flex child
    of .mydsh-dock-body. The transcript and the composer line up with the board column. */
 .mydsh-dock { display: flex; flex: 0 0 42%; flex-direction: column; min-height: 0; border-top: .5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); }
-.mydsh-dock-head { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; box-sizing: border-box; width: 100%; max-width: 1104px; margin: 0 auto; padding: 10px var(--mydsh-gutter) 2px; }
+/* The header is its own opaque band above the conversation's scroll area, drawn over anything the transcript pins to its top. */
+.mydsh-dock-head { position: relative; z-index: 10; display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; box-sizing: border-box; width: 100%; max-width: 1104px; margin: 0 auto; padding: 10px var(--mydsh-gutter) 6px; background: var(--dsw-alias-bg-base); }
 .mydsh-dock-head h2 { font-size: 15px; line-height: 22px; font-weight: 500; }
 .mydsh-dock-links { display: inline-flex; align-items: center; gap: 16px; }
 .mydsh-dock-links .mydsh-link { font-size: 13px; line-height: 20px; }
@@ -124,6 +125,8 @@ button.mydsh-crumb:hover { background: var(--dsw-alias-interactive-bg-hover); }
   --dsh-chat-content-width: min(calc(100% - 2 * var(--mydsh-gutter)), 1008px);
   --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 16px);
 }
+/* The transcript's own room below the header, kept when DSH scrolls a turn into view. */
+.mydsh-dock-body [data-conversation-scroll] { padding-top: 12px; scroll-padding-top: 12px; }
 .mydsh-dock-note { display: flex; align-items: baseline; gap: 12px; box-sizing: border-box; width: 100%; max-width: 1104px; margin: 8px auto 0; padding: 0 var(--mydsh-gutter); font: var(--dsw-font-xs-13); }
 
 /* Cards under my dsh's turns: a proposal, a candidate question, a receipt. A line of what it is about, then quiet buttons, or a quiet
