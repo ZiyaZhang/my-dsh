@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { BoardSnapshot } from '../src/host/remote.ts';
 import { BoardSource, type BoardSourceDeps } from '../src/client/board-source.ts';
-import { clock, dayTitle, when } from '../src/client/time.ts';
+import { clock, dayTitle, groupByDay, when } from '../src/client/time.ts';
 
 process.env.TZ = 'Asia/Shanghai';
 const at = (iso: string) => Date.parse(iso);
@@ -209,4 +209,19 @@ test('a reader that comes back while the last read is still in flight gets a rea
   answers[1]!();
   await settle();
   assert.deepEqual(source.getSnapshot(), { status: 'ready', snapshot: snapshot(2) });
+});
+
+test('做事记录 groups entries by local day, keeping their order', () => {
+  const now = at('2026-11-09T14:30:00+08:00');
+  const entries = [
+    { id: 'a-3', at: '2026-11-09T05:00:00Z' },
+    { id: 'a-2', at: '2026-11-08T17:00:00Z' },
+    { id: 'a-1', at: '2026-11-08T15:00:00Z' },
+    { id: 'a-0', at: '2026-10-30T01:00:00Z' },
+  ];
+  assert.deepEqual(groupByDay(entries, now).map(group => [group.day, group.daysAgo, group.entries.map(entry => entry.id)]), [
+    ['2026-11-09', 0, ['a-3', 'a-2']],
+    ['2026-11-08', 1, ['a-1']],
+    ['2026-10-30', 10, ['a-0']],
+  ]);
 });

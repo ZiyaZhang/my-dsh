@@ -3,7 +3,9 @@ import {
   Button, IconArchiveOutlineRegular, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, IconPlusOutlineRegular, Menu, StateDot, Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { BoardMatter, BoardSession, BoardSnapshot, ReviewDay } from '../host/remote.js';
+import { ActivityDialog } from './ActivityDialog.js';
 import type { BoardSource } from './board-source.js';
+import { Dock, type DockSlots, type OpenDock } from './Dock.js';
 import type { Dialogs } from './dialogs.js';
 import type { Call } from './index.js';
 import { clock, dayTitle, when } from './time.js';
@@ -13,6 +15,7 @@ export interface BoardPageProps {
   call: Call;
   dialogs: Dialogs;
   openSession: (sessionId: string) => void;
+  openDock: OpenDock;
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -42,8 +45,21 @@ function StateMark({ session, idle = false }: { session: BoardSession; idle?: bo
   }
 }
 
-/** The board page: the board of matters, or one matter's view. */
-export function BoardPage({ source, call, dialogs, openSession }: BoardPageProps) {
+/** The board page: the board of matters or one matter's view on top, scrolling; my dsh's conversation docked below. */
+export function BoardPage({ source, call, dialogs, openSession, openDock, renderSlot, SessionProvider }: BoardPageProps & DockSlots) {
+  const [activity, setActivity] = useState(false);
+  return (
+    <main className="mydsh-page">
+      <div className="mydsh-board">
+        <div className="mydsh-column"><BoardContent source={source} call={call} dialogs={dialogs} openSession={openSession} /></div>
+      </div>
+      <Dock openDock={openDock} renderSlot={renderSlot} SessionProvider={SessionProvider} openSession={openSession} showActivity={() => { setActivity(true); }} />
+      {activity && <ActivityDialog close={() => { setActivity(false); }} call={call} source={source} />}
+    </main>
+  );
+}
+
+function BoardContent({ source, call, dialogs, openSession }: Omit<BoardPageProps, 'openDock'>) {
   const state = useSyncExternalStore(source.subscribe, source.getSnapshot);
   const [matterId, setMatterId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -98,7 +114,7 @@ export function BoardPage({ source, call, dialogs, openSession }: BoardPageProps
 }
 
 function Page({ children }: { children: ReactNode }) {
-  return <main className="mydsh-page"><div className="mydsh-column">{children}</div></main>;
+  return <>{children}</>;
 }
 
 function BoardView({ snapshot, now, notice, openSession, openMatter, create }: {

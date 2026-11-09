@@ -55,6 +55,9 @@ export interface Matter {
   archivedAt?: string;
 }
 
+/** my dsh's agent preset. */
+export const PRESET_ID = 'my-dsh';
+
 export const ALIASES_MAX = 10;
 /** An alias is a phrase from a sentence, so it gets the same bound as a name. */
 export const ALIAS_MAX = 40;

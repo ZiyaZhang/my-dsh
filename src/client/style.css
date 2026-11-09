@@ -1,8 +1,10 @@
 /* The board page. Frame and type follow DSH's own first-level pages (the Plugins and Automation pages); the board widens the column for
-   two card columns. Colors, radii and type come from the theme's --dsw-* tokens, so light and dark both work. */
-.mydsh-page { height: 100%; overflow: auto; scrollbar-gutter: stable; box-sizing: border-box; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 1.6; }
-.mydsh-column { box-sizing: border-box; max-width: 1104px; margin: 0 auto; padding: 0 clamp(24px, 4vw, 48px) 48px; }
-@media (max-width: 767px) { .mydsh-column { padding-inline: 20px; } }
+   two card columns. Colors, radii and type come from the theme's --dsw-* tokens, so light and dark both work. The board scrolls on top;
+   my dsh's conversation is docked under it with its own scroll and the input at the bottom. */
+.mydsh-page { --mydsh-gutter: clamp(24px, 4vw, 48px); display: flex; flex-direction: column; height: 100%; overflow: hidden; box-sizing: border-box; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 1.6; }
+@media (max-width: 767px) { .mydsh-page { --mydsh-gutter: 20px; } }
+.mydsh-board { flex: 1 1 0; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.mydsh-column { box-sizing: border-box; max-width: 1104px; margin: 0 auto; padding: 0 var(--mydsh-gutter) 32px; }
 /* Zero specificity, so the classes below set their own margins. */
 :where(.mydsh-page) :where(h1, h2, h3, h4, p) { margin: 0; }
 .mydsh-page :focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
@@ -108,3 +110,49 @@ button.mydsh-crumb:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .mydsh-input:focus { border-color: var(--dsw-alias-state-business-primary); }
 .mydsh-input:disabled { color: var(--dsw-alias-label-dimmed); }
 .mydsh-form-error { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-state-error-primary); }
+
+/* The dock: my dsh's conversation, about 42% of the page. Slot anchors are display: contents, so the conversation body is a flex child
+   of .mydsh-dock-body. The transcript and the composer line up with the board column. */
+.mydsh-dock { display: flex; flex: 0 0 42%; flex-direction: column; min-height: 0; border-top: .5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); }
+.mydsh-dock-head { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; box-sizing: border-box; width: 100%; max-width: 1104px; margin: 0 auto; padding: 10px var(--mydsh-gutter) 2px; }
+.mydsh-dock-head h2 { font-size: 15px; line-height: 22px; font-weight: 500; }
+.mydsh-dock-links { display: inline-flex; align-items: center; gap: 16px; }
+.mydsh-dock-links .mydsh-link { font-size: 13px; line-height: 20px; }
+.mydsh-link:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; text-decoration: none; }
+.mydsh-dock-body { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.mydsh-dock-body [data-conversation-content] {
+  --dsh-chat-content-width: min(calc(100% - 2 * var(--mydsh-gutter)), 1008px);
+  --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 16px);
+}
+.mydsh-dock-note { display: flex; align-items: baseline; gap: 12px; box-sizing: border-box; width: 100%; max-width: 1104px; margin: 8px auto 0; padding: 0 var(--mydsh-gutter); font: var(--dsw-font-xs-13); }
+
+/* Cards under my dsh's turns: a proposal, a candidate question, a receipt. A line of what it is about, then quiet buttons, or a quiet
+   result once clicked. */
+.mydsh-cards { display: flex; flex-direction: column; gap: 10px; margin: 2px 0 8px; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.mydsh-cards :where(p) { margin: 0; }
+.mydsh-card-item { display: flex; flex-direction: column; gap: 6px; }
+.mydsh-card-item.is-receipt { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.mydsh-card-line { min-width: 0; }
+.mydsh-card-line.is-settled { color: var(--dsw-alias-label-secondary); }
+.mydsh-card-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mydsh-card-kind { margin-left: 6px; font-weight: 400; color: var(--dsw-alias-label-tertiary); }
+.mydsh-card-links { display: inline-flex; align-items: baseline; gap: 12px; }
+.mydsh-card-links .mydsh-link { font-size: 13px; line-height: 20px; }
+.mydsh-card-stat { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); }
+.mydsh-card-error { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-state-error-primary); }
+
+/* 做事记录 (portaled to the body by DSH's Modal): by day, time, what happened, why, 撤回. */
+.mydsh-activity-modal { width: min(640px, calc(100vw - 48px)); }
+.mydsh-activity { display: flex; flex-direction: column; gap: 14px; max-height: min(60vh, 560px); overflow: auto; font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-primary); }
+.mydsh-activity :where(h3, p) { margin: 0; }
+.mydsh-activity .mydsh-error, .mydsh-activity .mydsh-quiet, .mydsh-activity .mydsh-empty { margin: 0; }
+.mydsh-activity-day h3 { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; font: var(--dsw-font-s-strong-14); }
+.mydsh-activity-day h3 span { font-weight: 400; color: var(--dsw-alias-label-tertiary); }
+.mydsh-activity-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; }
+.mydsh-activity-row time { flex: none; width: 40px; font: var(--dsw-font-xs-13); line-height: 20px; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.mydsh-activity-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 20px; color: var(--dsw-alias-label-tertiary); }
+.mydsh-activity-body { flex: 1; min-width: 0; }
+.mydsh-activity-text { font-weight: 500; }
+.mydsh-activity-row.is-undone .mydsh-activity-text { font-weight: 400; color: var(--dsw-alias-label-secondary); }
+.mydsh-activity-why { margin-top: 2px; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.mydsh-activity-row .mydsh-link { flex: none; font-size: 13px; line-height: 20px; }

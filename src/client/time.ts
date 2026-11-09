@@ -31,3 +31,19 @@ export function dayTitle(day: { day: string; daysAgo: number }, now: number): { 
   if (day.daysAgo === 1) return { label: '昨天', date: text };
   return { label: text };
 }
+
+const localDay = (ms: number) => { const date = new Date(ms); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`; };
+const dayNumber = (key: string) => { const [year, month, day] = key.split('-').map(Number) as [number, number, number]; return Date.UTC(year, month - 1, day) / 86_400_000; };
+
+/** Entries grouped by the local day of `at`, in the order given; `daysAgo` counts calendar days back from `now`. */
+export function groupByDay<T extends { at: string }>(entries: readonly T[], now: number): { day: string; daysAgo: number; entries: T[] }[] {
+  const today = dayNumber(localDay(now));
+  const groups: { day: string; daysAgo: number; entries: T[] }[] = [];
+  for (const entry of entries) {
+    const day = localDay(Date.parse(entry.at));
+    const last = groups.at(-1);
+    if (last?.day === day) last.entries.push(entry);
+    else groups.push({ day, daysAgo: Math.max(0, today - dayNumber(day)), entries: [entry] });
+  }
+  return groups;
+}

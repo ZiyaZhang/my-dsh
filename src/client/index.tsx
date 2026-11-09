@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client';
 import type {} from '@deepseek-ai/dsh-client-connection/client';
 import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
@@ -9,16 +10,19 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SessionId } from '@deepseek-ai/dsh-session';
 import { MY_DSH_REMOTE, type MyDshRequest, type MyDshResult } from '../host/remote.js';
+import { openAssistant } from './assistant.js';
 import { BoardPage } from './BoardPage.js';
 import { BoardSource } from './board-source.js';
+import { CardTail, type CardActions } from './Cards.js';
 import { Dialogs } from './dialogs.js';
+import { DockConversation, type OpenDock } from './Dock.js';
 import { MatterDialogs } from './MatterDialog.js';
 import styles from './style.css';
 
 export type Call = <R extends MyDshRequest>(request: R, signal?: AbortSignal) => Promise<MyDshResult<R>>;
 
 const PANEL = 'my-dsh' as MainPanelId;
-export const inject = ['slots', 'layout', 'remote', 'uiWorkspace'];
+export const inject = ['slots', 'layout', 'remote', 'uiWorkspace', 'sessions'];
 
 export async function apply(ctx: Context): Promise<void> {
   const unmount = await ctx.remote.$mount(MY_DSH_REMOTE);
@@ -30,6 +34,8 @@ export async function apply(ctx: Context): Promise<void> {
     return () => style.remove();
   }, 'my-dsh: styles');
   const openSession = (sessionId: string) => { ctx.uiWorkspace.openSession(sessionId as SessionId); };
+  // `ctx.sessions` is typed as the Host session store when Host packages are in the same program; on the client it is ISessions.
+  const sessions = (ctx as unknown as { sessions: ISessions }).sessions;
   const dialogs = new Dialogs();
   ctx.inject(['remote.mydsh'], (ctx) => {
     const call: Call = async <R extends MyDshRequest>(request: R, signal?: AbortSignal) => {
@@ -50,9 +56,30 @@ export async function apply(ctx: Context): Promise<void> {
       },
     });
     const after = () => { void source.refresh(); };
+    const openDock: OpenDock = signal => openAssistant({
+      ensure: async inner => (await call({ action: 'assistant' }, inner)).sessionId,
+      known: sessionId => sessions.list.getSnapshot().byId[sessionId as SessionId] !== undefined,
+      refresh: () => sessions.refresh(),
+      watch: listener => sessions.list.subscribe(listener),
+      retain: (sessionId, inner) => sessions.retain(sessionId as SessionId, { source: 'myDshDock', signal: inner }),
+    }, signal);
+    const actions: CardActions = {
+      accept: async (id) => { await call({ action: 'acceptProposal', id }); await source.refresh(); },
+      decline: async (id) => { await call({ action: 'declineProposal', id }); await source.refresh(); },
+      answer: async (id, candidateId) => { await call({ action: 'answerWhich', id, candidateId }); await source.refresh(); },
+      undo: async (id) => { await call({ action: 'undo', id }); await source.refresh(); },
+      openSession,
+    };
     ctx.slots.inject('main', () => ctx.slots.register({
-      name: 'main', key: PANEL, inject: () => ({ source, call, dialogs, openSession }),
+      name: 'main', key: PANEL,
+      children: { 'mydsh.dock.conversation': { kind: 'single', scope: 'session' } },
+      inject: () => ({ source, call, dialogs, openSession, openDock }),
     }, BoardPage));
+    ctx.slots.inject('mydsh.dock.conversation', () => ctx.slots.register({ name: 'mydsh.dock.conversation' }, DockConversation));
+    ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
+      name: 'conversation.chat.turnTail', id: 'my-dsh.cards',
+      inject: () => ({ source, actions }),
+    }, CardTail));
     ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
       name: 'sidebar.panellist', id: PANEL, order: 0, label: () => '看板',
     }, ({ size }: { size?: number }) => <BoardIcon size={size ?? 18} />));
@@ -67,7 +94,7 @@ const ICON_MATTER = 'my-dsh.matter';
 const ICON_NEW = 'my-dsh.new';
 const ICON_LEAVE = 'my-dsh.leave';
 
-/** 加入事项 with the matters in progress and 新建事项; 移出事项「name」 when the session is in one. */
+/** 加入事项 with the matters in progress and 新建事项; 移出事项「name」 when the session is in one. Nothing for my dsh's own session. */
 function registerSessionMenu(ctx: Context, call: Call, dialogs: Dialogs, after: () => void): void {
   ctx.slots.inject('contextMenu.icon', function* () {
     yield ctx.slots.register({ name: 'contextMenu.icon', key: ICON_MATTER }, IconGoalOutlineRegular);
@@ -79,6 +106,7 @@ function registerSessionMenu(ctx: Context, call: Call, dialogs: Dialogs, after: 
     id: 'my-dsh.matters', target: 'session', order: 350,
     resolve: async ({ sessionId }, signal) => {
       const snapshot = await call({ action: 'snapshot' }, signal);
+      if (sessionId === snapshot.assistant.sessionId) return [];
       const current = snapshot.matters.find(matter => matter.sessions.some(session => session.id === sessionId));
       const others = snapshot.matters.filter(matter => !matter.archivedAt && matter.id !== current?.id);
       const actions: MenuAction[] = [{

@@ -4,8 +4,9 @@
  * only. The Host registers the definition through `ctx.agentPresets.register`.
  */
 import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry';
+import { PRESET_ID } from './remote.js';
 
-export const PRESET_ID = 'my-dsh';
+export { PRESET_ID };
 
 /** What my dsh is and does, then how it speaks. Rules only; the voice section follows the board plan's 说话 rules. */
 export const MY_DSH_PROMPT = `你是 my dsh，用户在 DeepSeek Harness（DSH）里的助理。用户在看板页下半跟你说话。
