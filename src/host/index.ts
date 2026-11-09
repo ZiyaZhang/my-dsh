@@ -110,6 +110,8 @@ export default class MyDsh extends TypertRemoteService {
   /** Settles once the `my-dsh` preset is registered. */
   private readonly preset: Promise<void>;
   private presetRegistered!: () => void;
+  /** The preset registry, held while its injection is live: the service's own context does not inject it, so reading it there throws. */
+  private presets: Context['agentPresets'] | undefined;
   /** The running check-or-create of my dsh's session. */
   private ensuring: Promise<string> | undefined;
   /** Cards a click is being applied to, so a second click cannot apply it twice. */
@@ -140,8 +142,9 @@ export default class MyDsh extends TypertRemoteService {
     ctx.inject(['agentPresets'], (inner) => {
       inner.effect(async () => {
         const unregister = await inner.agentPresets.register(MY_DSH_PRESET);
+        this.presets = inner.agentPresets;
         this.presetRegistered();
-        return unregister;
+        return () => { this.presets = undefined; return unregister(); };
       }, 'my-dsh: preset');
     });
     this.ready = Promise.all([this.store.open(), this.assistant.open()]).then(() => undefined);
@@ -394,7 +397,9 @@ export default class MyDsh extends TypertRemoteService {
       signal.addEventListener('abort', () => { clearTimeout(timer); }, { once: true });
       void this.preset.then(() => { clearTimeout(timer); });
     })]);
-    const preset = await this.ctx.agentPresets.resolve(PRESET_ID);
+    const presets = this.presets;
+    if (!presets) throw new RequestError('my dsh 的预设还没加载好，稍后再试');
+    const preset = await presets.resolve(PRESET_ID);
     if (preset.broken) throw new RequestError(`my dsh 的预设没加载成功：${preset.broken}`);
     const cwd = join(this.directory, 'assistant');
     await mkdir(cwd, { recursive: true });
