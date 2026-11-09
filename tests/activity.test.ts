@@ -28,7 +28,7 @@ test('entries say what happened in one line, with the names as they were', () =>
     id: 'a-1', at: T1, kind: 'start', matterId: 'm-brief', matterName: '每周简报', sessionId: 's-7', title: '整理周报',
     text: '在「每周简报」开了会话 整理周报', why: '前三期都在这里', task: '整理这周合进 master 的 PR，按模块分组', card: PLACE,
   });
-  assert.equal(sendEntry({ id: 'a-3', at: T1, sessionId: 's-7', title: '整理周报', why: '你要它加上 #7545', task: '加上 #7545', card: PLACE }).text,
+  assert.equal(sendEntry({ id: 'a-3', at: T1, sessionId: 's-7', title: '整理周报', why: '你要它加上 #4321', task: '加上 #4321', card: PLACE }).text,
     '给会话 整理周报 发了消息');
   assert.deepEqual(filed(), {
     id: 'a-2', at: T1, kind: 'file', matterId: 'm-brief', matterName: '每周简报', sessionId: 's-8', title: '草稿',
@@ -52,7 +52,7 @@ test('a start or a by-hand filing can be undone while the exact link it made is 
   assert.equal(canUndo(filed(), refiled), false);
   assert.equal(canUndo({ ...started(), undoneAt: T2 }, matters()), false);
   // Sending a message, taking a session out and confirming a proposal cannot be taken back here.
-  assert.equal(canUndo(sendEntry({ id: 'a-3', at: T1, sessionId: 's-7', title: '整理周报', why: '', task: '加上 #7545', card: PLACE }), matters()), false);
+  assert.equal(canUndo(sendEntry({ id: 'a-3', at: T1, sessionId: 's-7', title: '整理周报', why: '', task: '加上 #4321', card: PLACE }), matters()), false);
   assert.equal(canUndo(unfileEntry({ id: 'a-5', at: T1, matterId: 'm-brief', matterName: '每周简报', sessionId: 's-8', title: '草稿' }), matters()), false);
 });
 
@@ -89,7 +89,7 @@ test('the log keeps the newest entries when it grows past its bound', () => {
 });
 
 test('a start or a send leaves a receipt card under its turn; a start keeps 撤回 while it can be undone', () => {
-  const send = sendEntry({ id: 'a-3', at: T1, sessionId: 's-7', title: '整理周报', why: '', task: '加上 #7545', card: { ...PLACE, turn: 5 } });
+  const send = sendEntry({ id: 'a-3', at: T1, sessionId: 's-7', title: '整理周报', why: '', task: '加上 #4321', card: { ...PLACE, turn: 5 } });
   const cards = receiptCards([started(), filed(), send], matters());
   assert.deepEqual(cards, [
     { type: 'receipt', id: 'a-1', kind: 'start', line: '在「每周简报」开了会话 整理周报', target: 's-7', undoable: true, undone: false, ...PLACE },

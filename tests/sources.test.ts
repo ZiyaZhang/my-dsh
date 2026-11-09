@@ -6,8 +6,8 @@ import { INSTRUCTIONS_MAX, SOURCES_MAX, classifyUrl, matterInstructions, pathSou
 const refused = (run: () => unknown, message: RegExp) => assert.throws(run, (error: unknown) => error instanceof RequestError && message.test(error.message));
 
 test('a GitHub pull request link becomes a PR named owner/repo#n', () => {
-  assert.deepEqual(classifyUrl('https://github.com/deepseek-ai/deepseek-harness/pull/7545'),
-    { kind: 'pr', value: 'https://github.com/deepseek-ai/deepseek-harness/pull/7545', title: 'deepseek-ai/deepseek-harness#7545' });
+  assert.deepEqual(classifyUrl('https://github.com/example/app/pull/4321'),
+    { kind: 'pr', value: 'https://github.com/example/app/pull/4321', title: 'example/app#4321' });
   // Tabs, queries and fragments of the same PR point at the PR itself.
   assert.deepEqual(classifyUrl('  https://github.com/o/r/pull/12/files?diff=split#top '),
     { kind: 'pr', value: 'https://github.com/o/r/pull/12', title: 'o/r#12' });

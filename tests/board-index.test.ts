@@ -17,7 +17,7 @@ function input(overrides: Partial<IndexInput> = {}): IndexInput {
   const matters: Matter[] = [
     { id: 'm-brief', name: '每周简报', goal: '每周五发一期', aliases: ['周报'], sources: [], createdAt: T0,
       sessions: [link('s-sort', 'mydsh', '前三期都在这里'), link('s-old'), link('s-gone'), link('s-arch')] },
-    { id: 'm-auto', name: '自动化二期', goal: '事件触发的自动化任务 RFC #7545 合入', aliases: [], createdAt: T0, sessions: [link('s-ci')],
+    { id: 'm-auto', name: '发布说明', goal: '0.3 的发布说明随 #4321 合入', aliases: [], createdAt: T0, sessions: [link('s-ci')],
       workspaceId: 'w-other', instructions: `改飞书只替换对应的一节，不整篇替换。${'图用插件页的真实样式重截。'.repeat(20)}`,
       sources: [{ kind: 'folder', value: '/work/other/figures', title: 'figures' }, { kind: 'pr', value: 'https://github.com/o/r/pull/7781', title: 'o/r#7781' },
         { kind: 'doc', value: 'https://example.feishu.cn/docx/AbC' }] },
@@ -27,7 +27,7 @@ function input(overrides: Partial<IndexInput> = {}): IndexInput {
     view('s-sort', '2026-11-09T05:30:00Z', { title: '整理周报', state: 'waiting', wait: 'question' }),
     view('s-old', '2026-10-20T02:00:00Z', { title: '第一期发布 docs/weekly-01.md' }),
     view('s-arch', '2026-10-21T02:00:00Z', { title: '已归档的周报会话' }),
-    view('s-ci', '2026-11-09T05:58:00Z', { title: 'PR #7545 CI 重跑', state: 'failed' }),
+    view('s-ci', '2026-11-09T05:58:00Z', { title: 'PR #4321 CI 重跑', state: 'failed' }),
     view('s-free', '2026-11-08T23:00:00Z', { title: '看一遍我的 PR', state: 'running' }),
     view('s-older', '2026-10-01T00:00:00Z', { title: '一个多月前' }),
     view('s-blank', '2026-11-09T05:59:00Z', { title: null, blank: true }),
@@ -85,7 +85,7 @@ test('matters carry their aliases and the PRs and documents named in their name,
   assert.deepEqual(brief.aliases, ['周报']);
   assert.deepEqual(brief.docs, ['docs/weekly-01.md', 'feishu-kb/docs/weekly-04.md']);
   assert.deepEqual(brief.prs, []);
-  assert.deepEqual(index.matters.find(matter => matter.id === 'm-auto')!.prs, ['#7545']);
+  assert.deepEqual(index.matters.find(matter => matter.id === 'm-auto')!.prs, ['#4321']);
   assert.equal(brief.lastActivity, '2026-11-09T05:30:00.000Z');
 });
 
@@ -100,7 +100,7 @@ test('my dsh, blank, subagent and archived loose sessions stay out; loose sessio
 
 test('extractRefs finds PR numbers and documents once each', () => {
   // A pull request link counts as its PR, not as a document.
-  assert.deepEqual(extractRefs(['PR #7545 CI 重跑', '看 https://github.com/o/r/pull/7319 和 #7545', '#1 不算']), { prs: ['#7545', '#7319'], docs: [] });
+  assert.deepEqual(extractRefs(['PR #4321 CI 重跑', '看 https://github.com/o/r/pull/4310 和 #4321', '#1 不算']), { prs: ['#4321', '#4310'], docs: [] });
   assert.deepEqual(extractRefs(['写进 feishu-kb/docs/weekly-04.md。', '方案在 https://example.feishu.cn/docx/AbC123）里', 'notes.txt 和 a.b']),
     { prs: [], docs: ['feishu-kb/docs/weekly-04.md', 'https://example.feishu.cn/docx/AbC123', 'notes.txt'] });
 });
@@ -110,10 +110,10 @@ test('the per-turn context is a compact text: matters with their sessions and st
   assert.equal(text, [
     '看板索引。状态是这个 DSH 进程看到的；别的 DSH 进程里在跑的会话，这里显示空闲。',
     '',
-    '事项「自动化二期」 id=m-auto 目标：事件触发的自动化任务 RFC #7545 合入 PR：#7545 主工作区：other',
+    '事项「发布说明」 id=m-auto 目标：0.3 的发布说明随 #4321 合入 PR：#4321 主工作区：other',
     '来源：文件夹 /work/other/figures；PR o/r#7781；文档 https://example.feishu.cn/docx/AbC',
     `指令：改飞书只替换对应的一节，不整篇替换。${'图用插件页的真实样式重截。'.repeat(20)}`.slice(0, 203) + '…',
-    '- PR #7545 CI 重跑 id=s-ci 上一轮失败 13:58',
+    '- PR #4321 CI 重跑 id=s-ci 上一轮失败 13:58',
     '事项「每周简报」 id=m-brief 目标：每周五发一期 别名：周报 文档：docs/weekly-01.md、feishu-kb/docs/weekly-04.md 工作区：feishu-kb、deepseek-harness',
     '- 整理周报 id=s-sort 在等你回答 13:30 my dsh 开的',
     '- 已归档的周报会话 id=s-arch 已归档 10月21日 10:00',
