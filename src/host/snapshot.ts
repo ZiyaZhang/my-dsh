@@ -2,7 +2,7 @@
  * The board snapshot: matters with their sessions, the sessions in no matter, and the review by local day. Pure, so the day boundaries and
  * the orderings can be tested with a fixed clock and time zone.
  */
-import type { BoardMatter, BoardSession, BoardSnapshot, Matter, ReviewDay, ReviewSession } from './remote.js';
+import type { AssistantView, BoardMatter, BoardSession, BoardSnapshot, Matter, ReviewDay, ReviewSession } from './remote.js';
 import type { SessionView } from './sessions.js';
 
 export const REVIEW_DAYS = 14;
@@ -19,6 +19,8 @@ export interface SnapshotInput {
   matters: readonly Matter[];
   sessions: readonly SessionView[];
   workspaces: WorkspaceFacts;
+  /** my dsh's session and its cards. Its session is not work the board shows. */
+  assistant: AssistantView;
   /** Epoch ms. */
   now: number;
   /** IANA zone whose calendar days the review uses. */
@@ -53,10 +55,11 @@ const newestFirst = (a: { lastActivity: number; id: string }, b: { lastActivity:
   b.lastActivity - a.lastActivity || a.id.localeCompare(b.id);
 
 export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
-  const { workspaces } = input;
-  const views = new Map(input.sessions.map(view => [view.id, view]));
+  const { workspaces, assistant } = input;
+  const own = (view: SessionView) => view.id === assistant.sessionId;
+  const views = new Map(input.sessions.filter(view => !own(view)).map(view => [view.id, view]));
   const matterOf = new Map<string, Matter>();
-  for (const matter of input.matters) for (const id of matter.sessions) matterOf.set(id, matter);
+  for (const matter of input.matters) for (const link of matter.sessions) matterOf.set(link.sessionId, matter);
 
   const board = (view: SessionView): BoardSession => {
     const workspace = workspaces.workspaceOf.get(view.id);
@@ -66,11 +69,11 @@ export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
       ...(workspaces.archived.has(view.id) ? { archived: true as const } : {}),
     };
   };
-  /** What the DSH sidebar shows: no subagents, no blank sessions, nothing archived. */
-  const listed = (view: SessionView) => !view.subagent && !view.blank && !workspaces.archived.has(view.id);
+  /** What the DSH sidebar shows: no subagents, no blank sessions, nothing archived; and never my dsh's own session. */
+  const listed = (view: SessionView) => !view.subagent && !view.blank && !workspaces.archived.has(view.id) && !own(view);
 
   const matters: BoardMatter[] = input.matters.map((matter) => {
-    const sessions = matter.sessions.flatMap(id => { const view = views.get(id); return view ? [board(view)] : []; }).sort(newestFirst);
+    const sessions = matter.sessions.flatMap(link => { const view = views.get(link.sessionId); return view ? [board(view)] : []; }).sort(newestFirst);
     return {
       id: matter.id, name: matter.name, goal: matter.goal, createdAt: matter.createdAt,
       ...(matter.archivedAt ? { archivedAt: matter.archivedAt } : {}),
@@ -101,5 +104,5 @@ export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
   const review = [...days.values()].sort((a, b) => a.daysAgo - b.daysAgo);
   for (const day of review) day.sessions.sort(newestFirst);
 
-  return { matters: [...active, ...archived], unassigned, review, now: input.now };
+  return { matters: [...active, ...archived], unassigned, review, assistant, now: input.now };
 }

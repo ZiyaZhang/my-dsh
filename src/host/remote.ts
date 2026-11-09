@@ -4,19 +4,60 @@
  */
 import type { InvocationDescriptor, RemoteResult, RemoteStreamHandle, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol';
 
+/**
+ * How a session came into a matter: `manual` the user put it there, `mydsh` my dsh started it there, `origin` filed by where it came from
+ * (who started it, a fork, a branch, a PR, an automation task) and `model` filed by the model. M2 writes the first two.
+ */
+export type LinkSource = 'manual' | 'mydsh' | 'origin' | 'model';
+export const LINK_SOURCES: readonly LinkSource[] = ['manual', 'mydsh', 'origin', 'model'];
+
+/** One session in a matter, with how and when it got there. */
+export interface SessionLink {
+  sessionId: string;
+  by: LinkSource;
+  /** ISO time the link was made. */
+  at: string;
+  /** One sentence, when whoever made the link gave a reason. */
+  why?: string;
+}
+
+/** What a matter's context points at: a folder or file on this machine, a PR, a document, or another link. */
+export type SourceKind = 'folder' | 'file' | 'pr' | 'doc' | 'link';
+export const SOURCE_KINDS: readonly SourceKind[] = ['folder', 'file', 'pr', 'doc', 'link'];
+
+export interface MatterSource {
+  kind: SourceKind;
+  /** An absolute path for a folder or file, a URL otherwise. Paths are used where they are; nothing is copied. */
+  value: string;
+  /** What to call it: a folder's or file's name, `owner/repo#n` for a PR. */
+  title?: string;
+}
+
 /** A matter: what a group of sessions is for. Big matters have a main conversation; the rest are only a board. */
 export interface Matter {
   id: string;
   name: string;
   /** One sentence. */
   goal: string;
-  /** Session ids, in the order they joined. */
-  sessions: string[];
+  /** In the order the sessions joined. */
+  sessions: SessionLink[];
+  /** Other words the user has used for this matter, newest first, at most {@link ALIASES_MAX}. */
+  aliases: string[];
+  /** Its main workspace: where my dsh starts its sessions. */
+  workspaceId?: string;
+  /** Folders, files, PRs, documents and links that go with it. */
+  sources: MatterSource[];
+  /** The user's standing requests for this matter, at most 2,000 characters. */
+  instructions?: string;
   /** The session id of its main conversation, once one is opened. */
   main?: string;
   createdAt: string;
   archivedAt?: string;
 }
+
+export const ALIASES_MAX = 10;
+/** An alias is a phrase from a sentence, so it gets the same bound as a name. */
+export const ALIAS_MAX = 40;
 
 /** What a session is doing, as far as this DSH process has seen. */
 export type SessionState = 'waiting' | 'running' | 'failed' | 'idle';
@@ -72,8 +113,106 @@ export interface BoardSnapshot {
   unassigned: BoardSession[];
   /** The last 14 local days that had activity, today first. */
   review: ReviewDay[];
+  /** my dsh's session and the cards under its turns. */
+  assistant: AssistantView;
   /** Host time the snapshot was taken, epoch ms. */
   now: number;
+}
+
+/**
+ * One thing in 做事记录. `start`: my dsh started a session in a matter. `send`: my dsh sent a message to a session. `file`: the user put
+ * a session in a matter by hand, or moved it there. `unfile`: the user took one out by hand. `manage`: a new, merged or renamed matter the
+ * user confirmed on a card. `undo`: the user took back an earlier entry.
+ */
+export type ActivityKind = 'start' | 'send' | 'file' | 'unfile' | 'manage' | 'undo';
+
+export interface ActivityEntry {
+  id: string;
+  /** ISO time. For `start` and `file` it is also the time of the link the entry made, which is how undo finds that link. */
+  at: string;
+  kind: ActivityKind;
+  matterId?: string;
+  sessionId?: string;
+  /** The matter's name and the session's title as they were then. */
+  matterName?: string;
+  title?: string;
+  /** What happened, in one line, with the names as they were then. */
+  text: string;
+  why: string;
+  /** `start` and `send`: what my dsh sent to the session. */
+  task?: string;
+  /** `start` and `send`: where the receipt sits in my dsh's conversation. */
+  card?: CardPlace;
+  /** Set once the entry was taken back. */
+  undoneAt?: string;
+  /** `undo`: the entry it took back. */
+  undoes?: string;
+}
+
+/** An entry as 做事记录 shows it. */
+export interface ActivityView extends ActivityEntry {
+  /** Taking it back would still change something. */
+  undoable: boolean;
+}
+
+/** A change to the matters that waits for the user's click. Names are kept as they were when it was proposed. */
+export type ProposalChange =
+  | { kind: 'new'; name: string; goal: string }
+  | { kind: 'merge'; fromId: string; fromName: string; intoId: string; intoName: string }
+  | { kind: 'rename'; matterId: string; oldName: string; name: string };
+
+/** Where a card sits: under one turn of my dsh's session. */
+export interface CardPlace {
+  /** my dsh's session. */
+  sessionId: string;
+  /** The turn whose tool call made the card. */
+  turn: number;
+}
+
+export interface Proposal extends CardPlace {
+  id: string;
+  change: ProposalChange;
+  why: string;
+  /** The words the user used for the matter, kept as an alias once accepted. */
+  phrase?: string;
+  at: string;
+  state: 'pending' | 'accepted' | 'declined';
+  decidedAt?: string;
+  /** `new`, once accepted: the matter it made. */
+  matterId?: string;
+}
+
+export interface WhichCandidate {
+  kind: 'matter' | 'session';
+  id: string;
+  /** Its name when my dsh asked. */
+  label: string;
+}
+
+/** my dsh could not tell which matter or session a phrase meant and asked the user to pick. */
+export interface WhichQuestion extends CardPlace {
+  id: string;
+  phrase: string;
+  candidates: WhichCandidate[];
+  why: string;
+  at: string;
+  state: 'pending' | 'answered';
+  /** The pick, or null for 都不是. */
+  answer?: WhichCandidate | null;
+  answeredAt?: string;
+}
+
+/** A card as the conversation draws it. */
+export type CardView =
+  | (CardPlace & { type: 'proposal'; id: string; kind: ProposalChange['kind']; line: string; state: Proposal['state'] })
+  | (CardPlace & { type: 'which'; id: string; phrase: string; candidates: WhichCandidate[]; state: WhichQuestion['state']; answer?: WhichCandidate | null })
+  /** The receipt my dsh leaves under the turn that started a session or sent it a message; `id` is the activity entry. */
+  | (CardPlace & { type: 'receipt'; id: string; kind: 'start' | 'send'; line: string; target: string; undoable: boolean; undone: boolean });
+
+export interface AssistantView {
+  /** my dsh's session, once it exists. */
+  sessionId: string | null;
+  cards: CardView[];
 }
 
 export type MyDshRequest =
@@ -84,7 +223,13 @@ export type MyDshRequest =
   | { action: 'archiveMatter'; id: string }
   | { action: 'unarchiveMatter'; id: string }
   | { action: 'addSession'; matterId: string; sessionId: string }
-  | { action: 'removeSession'; sessionId: string };
+  | { action: 'removeSession'; sessionId: string }
+  | { action: 'assistant' }
+  | { action: 'activity' }
+  | { action: 'undo'; id: string }
+  | { action: 'acceptProposal'; id: string }
+  | { action: 'declineProposal'; id: string }
+  | { action: 'answerWhich'; id: string; candidateId: string | null };
 
 /** The result of each action. A change returns the matter it changed; `removeSession` returns null when the session was in none. */
 export interface MyDshResults {
@@ -96,6 +241,15 @@ export interface MyDshResults {
   unarchiveMatter: Matter;
   addSession: Matter;
   removeSession: Matter | null;
+  /** my dsh's session, made when there is none. */
+  assistant: { sessionId: string };
+  /** Newest first. */
+  activity: ActivityView[];
+  /** The entry that records the undo. */
+  undo: ActivityView;
+  acceptProposal: Proposal;
+  declineProposal: Proposal;
+  answerWhich: WhichQuestion;
 }
 export type MyDshResponse = MyDshResults[keyof MyDshResults];
 export type MyDshResult<R extends MyDshRequest> = MyDshResults[R['action']];
@@ -110,7 +264,7 @@ export class RequestError extends Error {}
 export const NAME_MAX = 40;
 export const GOAL_MAX = 120;
 
-/** The fields each action takes, all required. */
+/** The fields each action takes, all required; `answerWhich` takes null as its candidateId for 都不是. */
 const FIELDS: { [A in MyDshRequest['action']]: readonly string[] } = {
   snapshot: [],
   createMatter: ['name', 'goal'],
@@ -120,6 +274,12 @@ const FIELDS: { [A in MyDshRequest['action']]: readonly string[] } = {
   unarchiveMatter: ['id'],
   addSession: ['matterId', 'sessionId'],
   removeSession: ['sessionId'],
+  assistant: [],
+  activity: [],
+  undo: ['id'],
+  acceptProposal: ['id'],
+  declineProposal: ['id'],
+  answerWhich: ['id', 'candidateId'],
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -177,6 +337,12 @@ export function parseRequest(value: unknown): MyDshRequest {
     case 'unarchiveMatter': return { action, id: id(value, 'id') };
     case 'addSession': return { action, matterId: id(value, 'matterId'), sessionId: id(value, 'sessionId') };
     case 'removeSession': return { action, sessionId: id(value, 'sessionId') };
+    case 'assistant': return { action };
+    case 'activity': return { action };
+    case 'undo': return { action, id: id(value, 'id') };
+    case 'acceptProposal': return { action, id: id(value, 'id') };
+    case 'declineProposal': return { action, id: id(value, 'id') };
+    case 'answerWhich': return { action, id: id(value, 'id'), candidateId: value.candidateId === null ? null : id(value, 'candidateId') };
   }
 }
 

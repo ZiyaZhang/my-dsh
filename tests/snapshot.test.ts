@@ -1,23 +1,24 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Matter } from '../src/host/remote.ts';
+import type { Matter, SessionLink } from '../src/host/remote.ts';
 import type { SessionView } from '../src/host/sessions.ts';
 import { buildSnapshot, dayKey, type SnapshotInput } from '../src/host/snapshot.ts';
 
 const at = (iso: string) => Date.parse(iso);
 const NOW = at('2026-11-09T06:00:00Z'); // 14:00 in Shanghai
 
+const links = (...ids: string[]): SessionLink[] => ids.map(sessionId => ({ sessionId, by: 'manual', at: '2026-10-01T00:00:00Z' }));
 const view = (id: string, lastActivity: string, overrides: Partial<SessionView> = {}): SessionView => ({
   id, title: id, blank: false, subagent: false, state: 'idle', lastActivity: at(lastActivity), ...overrides,
 });
 
 function input(overrides: Partial<SnapshotInput> = {}): SnapshotInput {
   const matters: Matter[] = [
-    { id: 'm-brief', name: '每周简报', goal: '每周五发一期', sessions: ['s-sort', 's-gone', 's-old'], createdAt: '2026-10-01T00:00:00Z' },
-    { id: 'm-notes', name: '发布说明', goal: '', sessions: ['s-ask'], createdAt: '2026-10-02T00:00:00Z' },
-    { id: 'm-empty', name: '看板', goal: '组里讨论', sessions: [], createdAt: '2026-11-09T05:00:00Z' },
-    { id: 'm-done', name: '第二期', goal: '', sessions: ['s-done'], createdAt: '2026-09-01T00:00:00Z', archivedAt: '2026-10-20T00:00:00Z' },
-    { id: 'm-done2', name: '第三期', goal: '', sessions: [], createdAt: '2026-09-02T00:00:00Z', archivedAt: '2026-10-25T00:00:00Z' },
+    { id: 'm-brief', name: '每周简报', goal: '每周五发一期', sessions: links('s-sort', 's-gone', 's-old'), aliases: [], sources: [], createdAt: '2026-10-01T00:00:00Z' },
+    { id: 'm-notes', name: '发布说明', goal: '', sessions: links('s-ask'), aliases: [], sources: [], createdAt: '2026-10-02T00:00:00Z' },
+    { id: 'm-empty', name: '看板', goal: '组里讨论', sessions: [], aliases: [], sources: [], createdAt: '2026-11-09T05:00:00Z' },
+    { id: 'm-done', name: '第二期', goal: '', sessions: links('s-done'), aliases: [], sources: [], createdAt: '2026-09-01T00:00:00Z', archivedAt: '2026-10-20T00:00:00Z' },
+    { id: 'm-done2', name: '第三期', goal: '', sessions: [], aliases: [], sources: [], createdAt: '2026-09-02T00:00:00Z', archivedAt: '2026-10-25T00:00:00Z' },
   ];
   const sessions: SessionView[] = [
     view('s-sort', '2026-11-09T05:30:00Z', { title: '整理周报', state: 'running' }),
@@ -31,9 +32,10 @@ function input(overrides: Partial<SnapshotInput> = {}): SnapshotInput {
     view('s-edge', '2026-10-27T00:00:00Z', { title: '十三天前' }),
     view('s-far', '2026-10-26T12:00:00Z', { title: '十四天前' }),
     view('s-ahead', '2026-11-09T07:00:00Z', { title: '时钟快了' }),
+    view('s-mydsh', '2026-11-09T05:59:30Z', { title: 'my dsh' }),
   ];
   return {
-    matters, sessions, now: NOW, timeZone: 'Asia/Shanghai',
+    matters, sessions, now: NOW, timeZone: 'Asia/Shanghai', assistant: { sessionId: 's-mydsh', cards: [] },
     workspaces: { workspaceOf: new Map([['s-sort', 'weekly-brief'], ['s-ask', 'release-notes']]), archived: new Set(['s-hidden']) },
     ...overrides,
   };
@@ -60,18 +62,18 @@ test('in-progress matters come first by newest activity, then archived ones by n
 
 test('untitled sessions read as DSH names them: a blank one is a new session, others are untitled', () => {
   const sessions = [view('s-1', '2026-11-09T01:00:00Z', { title: null }), view('s-2', '2026-11-09T01:00:00Z', { title: null, blank: true })];
-  const matters: Matter[] = [{ id: 'm-1', name: '发布说明', goal: '', sessions: ['s-1', 's-2'], createdAt: '2026-11-01T00:00:00Z' }];
+  const matters: Matter[] = [{ id: 'm-1', name: '发布说明', goal: '', sessions: links('s-1', 's-2'), aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z' }];
   const titles = buildSnapshot(input({ matters, sessions })).matters[0]!.sessions.map(session => session.title).sort();
   assert.deepEqual(titles, ['新会话', '未命名']);
 });
 
 test('a matter keeps a session archived in DSH and marks it', () => {
-  const matters: Matter[] = [{ id: 'm-1', name: '发布说明', goal: '', sessions: ['s-hidden'], createdAt: '2026-11-01T00:00:00Z' }];
+  const matters: Matter[] = [{ id: 'm-1', name: '发布说明', goal: '', sessions: links('s-hidden'), aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z' }];
   const [session] = buildSnapshot(input({ matters })).matters[0]!.sessions;
   assert.equal(session?.archived, true);
 });
 
-test('unassigned sessions leave out those in a matter and those DSH hides: archived, blank, subagent', () => {
+test('unassigned sessions leave out those in a matter, those DSH hides (archived, blank, subagent) and my dsh itself', () => {
   const { unassigned } = buildSnapshot(input());
   assert.deepEqual(unassigned.map(session => session.id), ['s-ahead', 's-free', 's-edge', 's-far']);
   assert.equal(unassigned[1]!.title, '未命名');
@@ -97,6 +99,15 @@ test('day boundaries follow the time zone', () => {
   assert.deepEqual(review[1]!.sessions.map(session => session.id), ['s-free', 's-done']);
 });
 
-test('the snapshot carries the time it was taken', () => {
-  assert.equal(buildSnapshot(input()).now, NOW);
+test('the snapshot carries the time it was taken, and my dsh with its cards', () => {
+  const snapshot = buildSnapshot(input());
+  assert.equal(snapshot.now, NOW);
+  assert.deepEqual(snapshot.assistant, { sessionId: 's-mydsh', cards: [] });
+});
+
+test('my dsh never shows on the board, even put in a matter', () => {
+  const matters: Matter[] = [{ id: 'm-1', name: '发布说明', goal: '', sessions: links('s-mydsh'), aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z' }];
+  const snapshot = buildSnapshot(input({ matters }));
+  assert.deepEqual(snapshot.matters[0]!.sessions, []);
+  assert.ok(!snapshot.review.some(day => day.sessions.some(session => session.id === 's-mydsh')));
 });

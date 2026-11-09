@@ -66,3 +66,18 @@ test('ids are non-empty strings without spaces', () => {
   rejects({ action: 'addSession', matterId: 'm 1', sessionId: 's-1' }, /matterId 不是有效的 id/);
   rejects({ action: 'removeSession', sessionId: 'x'.repeat(201) }, /sessionId 不是有效的 id/);
 });
+
+test('parseRequest takes the my dsh actions: its session, 做事记录, undo and the card clicks', () => {
+  assert.deepEqual(parseRequest({ action: 'assistant' }), { action: 'assistant' });
+  assert.deepEqual(parseRequest({ action: 'activity' }), { action: 'activity' });
+  assert.deepEqual(parseRequest({ action: 'undo', id: 'a-1' }), { action: 'undo', id: 'a-1' });
+  assert.deepEqual(parseRequest({ action: 'acceptProposal', id: 'p-1' }), { action: 'acceptProposal', id: 'p-1' });
+  assert.deepEqual(parseRequest({ action: 'declineProposal', id: 'p-1' }), { action: 'declineProposal', id: 'p-1' });
+  assert.deepEqual(parseRequest({ action: 'answerWhich', id: 'q-1', candidateId: 'm-1' }), { action: 'answerWhich', id: 'q-1', candidateId: 'm-1' });
+  assert.deepEqual(parseRequest({ action: 'answerWhich', id: 'q-1', candidateId: null }), { action: 'answerWhich', id: 'q-1', candidateId: null });
+  rejects({ action: 'answerWhich', id: 'q-1' }, /answerWhich 缺少字段：candidateId/);
+  rejects({ action: 'answerWhich', id: 'q-1', candidateId: 7 }, /candidateId 必须是文字/);
+  rejects({ action: 'answerWhich', id: 'q-1', candidateId: '' }, /candidateId 不是有效的 id/);
+  rejects({ action: 'undo', id: 'a 1' }, /id 不是有效的 id/);
+  rejects({ action: 'assistant', sessionId: 's-1' }, /assistant 不接受这些字段：sessionId/);
+});

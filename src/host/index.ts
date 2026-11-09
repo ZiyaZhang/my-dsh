@@ -84,8 +84,9 @@ export default class MyDsh extends TypertRemoteService {
         case 'unarchiveMatter': return await this.store.update(matters => unarchiveMatter(matters, parsed.id));
         case 'addSession':
           await this.requireSession(parsed.sessionId);
-          return await this.store.update(matters => addSession(matters, parsed.matterId, parsed.sessionId));
+          return await this.store.update(matters => addSession(matters, parsed.matterId, { sessionId: parsed.sessionId, by: 'manual', at: now() }));
         case 'removeSession': return await this.store.update(matters => removeSession(matters, parsed.sessionId));
+        default: throw new RequestError(`${parsed.action} 还没接上`);
       }
     } catch (error) {
       if (error instanceof RequestError) throw new RemoteError('gateway/bad-request', error.message, {}, { cause: error });
@@ -114,6 +115,7 @@ export default class MyDsh extends TypertRemoteService {
       matters: this.store.list(),
       sessions: this.sessions.all().map(sessionView),
       workspaces: this.workspaceFacts(),
+      assistant: { sessionId: null, cards: [] },
       now: Date.now(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
