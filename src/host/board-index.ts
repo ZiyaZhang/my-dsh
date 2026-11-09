@@ -188,14 +188,16 @@ const WAIT: Record<WaitKind, string> = { question: '在等你回答', approval: 
 const BY: Record<LinkSource, string> = { manual: '', mydsh: 'my dsh 开的', origin: '按来头归的', model: '模型归的' };
 
 /** `HH:mm` on the same local day, `M月D日 HH:mm` this year, `YYYY年M月D日` before. */
-function stamp(ms: number, now: number, timeZone: string): string {
+export function stamp(ms: number, now: number, timeZone: string): string {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
     timeZone, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(ms).map(part => [part.type, part.value]));
   const clock = `${parts.hour}:${parts.minute}`;
   if (dayKey(ms, timeZone) === dayKey(now, timeZone)) return clock;
-  if (dayKey(ms, timeZone).slice(0, 4) === dayKey(now, timeZone).slice(0, 4)) return `${parts.month}月${parts.day}日 ${clock}`;
-  return `${parts.year}年${parts.month}月${parts.day}日`;
+  // The en-CA parts can come zero-padded; dates are written 11月8日.
+  const [month, day] = [Number(parts.month), Number(parts.day)];
+  if (dayKey(ms, timeZone).slice(0, 4) === dayKey(now, timeZone).slice(0, 4)) return `${month}月${day}日 ${clock}`;
+  return `${parts.year}年${month}月${day}日`;
 }
 
 /**

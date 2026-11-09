@@ -3,6 +3,7 @@
  * entry that made a link (`start`, `file`) can be undone while that exact link, matched by its time, is still in its matter; undoing
  * takes the session out of the matter, keeps the session, marks the entry and records the undo as an entry of its own.
  */
+import { stamp } from './board-index.js';
 import { linkOf, removeSession, type Changed } from './matters.js';
 import { RequestError, type ActivityEntry, type ActivityView, type CardPlace, type CardView, type LinkSource, type Matter } from './remote.js';
 
@@ -99,4 +100,25 @@ export function receiptCards(entries: readonly ActivityEntry[], matters: readonl
       undoable: canUndo(entry, matters), undone: entry.undoneAt !== undefined, ...entry.card,
     }];
   });
+}
+
+/** Entries in the per-turn context. */
+export const CONTEXT_ACTIVITY = 10;
+
+/** Who did what, as the per-turn context names each kind. */
+const DONE_BY: Record<ActivityEntry['kind'], string> = {
+  start: 'my dsh 开会话', send: 'my dsh 发消息', file: '用户手动加入', unfile: '用户手动移出', manage: '用户确认改事项', undo: '用户撤回',
+};
+
+/**
+ * The newest entries as my dsh reads them each step, so it says what happened instead of guessing.
+ * @returns the text, or an empty string while the log is empty.
+ */
+export function recentActivity(entries: readonly ActivityEntry[], clock: { now: number; timeZone: string }, count = CONTEXT_ACTIVITY): string {
+  const recent = entries.slice(-count).reverse();
+  if (recent.length === 0) return '';
+  return [
+    `做事记录（最近 ${recent.length} 条，新的在前）：`,
+    ...recent.map(entry => `- ${stamp(Date.parse(entry.at), clock.now, clock.timeZone)} ${DONE_BY[entry.kind]}：${entry.text}${entry.undoneAt ? '（已撤回）' : ''}`),
+  ].join('\n');
 }

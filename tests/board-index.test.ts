@@ -132,6 +132,8 @@ test('a matter with many sessions shows the newest few and says how many more th
   crowded.matters[1]!.sessions = many.map(session => link(session.id));
   const text = indexContext(buildBoardIndex(crowded), { now: NOW, timeZone: 'Asia/Shanghai' });
   assert.match(text, /- 第8条 id=s-8/);
+  // Earlier days are written without a leading zero.
+  assert.match(text, /- 第7条 id=s-7 空闲 11月8日 09:00/);
   assert.doesNotMatch(text, /- 第2条 id=s-2/);
   assert.match(text, /还有 3 条，用 board_index 看全部/);
 });

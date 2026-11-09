@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RequestError, type ActivityEntry, type Matter, type SessionLink } from '../src/host/remote.ts';
 import {
-  ACTIVITY_MAX, activityView, appendActivity, canUndo, fileEntry, markUndone, receiptCards, sendEntry, startEntry, undoChange, unfileEntry,
+  ACTIVITY_MAX, activityView, appendActivity, canUndo, fileEntry, markUndone, receiptCards, recentActivity, sendEntry, startEntry, undoChange, unfileEntry,
 } from '../src/host/activity.ts';
 import { addSession, removeSession } from '../src/host/matters.ts';
 
@@ -97,4 +97,24 @@ test('a start or a send leaves a receipt card under its turn; a start keeps 撤�
   ]);
   const undone = receiptCards([{ ...started(), undoneAt: T2 }], removeSession(matters(), 's-7').matters);
   assert.deepEqual(undone.map(card => card.type === 'receipt' && [card.undoable, card.undone]), [[false, true]]);
+});
+
+test('the per-turn context carries the last ten entries, newest first, with who did each and whether it was taken back', () => {
+  const NOW = Date.parse('2026-11-09T06:00:00Z'); // 14:00 in Shanghai
+  const clock = { now: NOW, timeZone: 'Asia/Shanghai' };
+  const { entries: [start, undo] } = markUndone([{ ...started(), at: '2026-11-09T05:40:00.000Z' }], 'a-1', { id: 'a-9', at: '2026-11-09T05:45:00.000Z' });
+  const yesterday = { ...filed(), at: '2026-11-08T09:00:00.000Z' };
+  assert.deepEqual(recentActivity([yesterday, start!, undo!], clock).split('\n'), [
+    '做事记录（最近 3 条，新的在前）：',
+    '- 13:45 用户撤回：撤回了会话 整理周报（在「每周简报」）',
+    '- 13:40 my dsh 开会话：在「每周简报」开了会话 整理周报（已撤回）',
+    '- 11月8日 17:00 用户手动加入：把会话 草稿 加进「每周简报」',
+  ]);
+  const many = Array.from({ length: 12 }, (_, n) => ({ ...filed(), id: `a-${n}`, at: new Date(NOW - (12 - n) * 60_000).toISOString(), text: `第${n}条` }));
+  const lines = recentActivity(many, clock).split('\n');
+  assert.equal(lines[0], '做事记录（最近 10 条，新的在前）：');
+  assert.equal(lines.length, 11);
+  assert.match(lines[1]!, /第11条$/);
+  assert.match(lines[10]!, /第2条$/);
+  assert.equal(recentActivity([], clock), '');
 });

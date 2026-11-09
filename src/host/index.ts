@@ -17,7 +17,9 @@ import { appendPluginRecord, type Session, type SessionId } from '@deepseek-ai/d
 import type {} from '@deepseek-ai/dsh-storage-domain';
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace';
-import { activityView, appendActivity, fileEntry, manageEntry, markUndone, receiptCards, sendEntry, startEntry, undoChange, unfileEntry } from './activity.js';
+import {
+  activityView, appendActivity, fileEntry, manageEntry, markUndone, receiptCards, recentActivity, sendEntry, startEntry, undoChange, unfileEntry,
+} from './activity.js';
 import { AssistantStore } from './assistant-store.js';
 import { buildBoardIndex, chooseWorkspace, fillWorkspaces, indexContext, type BoardIndex, type IndexInput } from './board-index.js';
 import { CorrectionLog, declineCorrection, membershipCorrection, pickCorrection, undoCorrection } from './corrections.js';
@@ -216,9 +218,11 @@ export default class MyDsh extends TypertRemoteService {
     return buildBoardIndex(this.indexInput());
   }
 
-  /** The board index each model step of my dsh reads. */
+  /** What each model step of my dsh reads: the board index, then the newest entries of 做事记录. */
   contextText(): string {
-    return indexContext(this.boardIndex(), { now: Date.now(), timeZone: this.timeZone() });
+    const clock = { now: Date.now(), timeZone: this.timeZone() };
+    const activity = recentActivity(this.assistant.peek().activity, clock);
+    return [indexContext(this.boardIndex(), clock), ...(activity ? [activity] : [])].join('\n\n');
   }
 
   /** A session's title, state, matter and workspace, with its last replies. State is this process's view; `liveHere` says whether it runs here. */
