@@ -35,3 +35,11 @@ test('the system prompt says what my dsh does and does not do, how to resolve a 
   // The persona text is a template: a {{…}} group would be read as a variable.
   assert.doesNotMatch(MY_DSH_PROMPT, /\{\{/);
 });
+
+test('the prompt keeps my dsh off the page, off guesses, and off workspaces in proposals', () => {
+  assert.match(MY_DSH_PROMPT, /不讲界面：不描述按钮、卡片和页面/);
+  assert.match(MY_DSH_PROMPT, /不用“大概”“可能”去猜/);
+  assert.match(MY_DSH_PROMPT, /最近 10 条做事记录/);
+  assert.match(MY_DSH_PROMPT, /说提议时不提主工作区/);
+  for (const page of ['回执上撤回', '点卡片', '卡片上点', '让用户点', '主工作区不确定就不填']) assert.ok(!MY_DSH_PROMPT.includes(page), page);
+});

@@ -52,7 +52,7 @@ export function apply(ctx: Context): void {
 
   ctx.tools.register(defineTool({
     name: 'start_session',
-    description: '在一件事项里开一条新会话，把任务作为第一条消息发给它，并放进这件事项。会话开在事项的主工作区；没有主工作区时，开在事项里最近一条会话所在的工作区。用户能在回执上撤回。只在用户要你做事时调用。',
+    description: '在一件事项里开一条新会话，把任务作为第一条消息发给它，并放进这件事项。会话开在事项的主工作区；没有主工作区时，开在事项里最近一条会话所在的工作区。只在用户要你做事时调用。',
     parameters: {
       matterId: { type: 'string', required: true, description: '事项 id，来自看板索引。' },
       title: { type: 'string', required: true, description: '新会话的标题，短。' },
@@ -83,12 +83,12 @@ export function apply(ctx: Context): void {
 
   ctx.tools.register(defineTool({
     name: 'propose_matter_change',
-    description: '提议新建、合并或改名事项。调用不会改任何东西：用户在卡片上点了才生效。调用前先用一句话说要做什么、为什么；调用后这一轮结束。kind=new 要 name 和 goal，可选 workspaceId（主工作区 id，来自 board_index）；kind=merge 要 fromId（被并进去的事项）和 intoId（留下的事项）；kind=rename 要 matterId 和新的 name。',
+    description: '提议新建、合并或改名事项。调用不会改任何东西：用户确认了才生效。调用前先用一句话说要做什么、为什么；调用后这一轮结束。kind=new 要 name 和 goal；kind=merge 要 fromId（被并进去的事项）和 intoId（留下的事项）；kind=rename 要 matterId 和新的 name。',
     parameters: {
       kind: { type: 'string', required: true, enum: ['new', 'merge', 'rename'] },
       name: { type: 'string', description: 'new 和 rename：事项的名字，最多 40 个字。' },
       goal: { type: 'string', description: 'new：一句话目标，最多 120 个字。' },
-      workspaceId: { type: 'string', description: 'new：主工作区 id。' },
+      workspaceId: { type: 'string', description: 'new：用户指定了主工作区时填它的 id。' },
       matterId: { type: 'string', description: 'rename：要改名的事项 id。' },
       fromId: { type: 'string', description: 'merge：被并进去、之后不再单独存在的事项 id。' },
       intoId: { type: 'string', description: 'merge：留下的事项 id。' },
@@ -106,7 +106,7 @@ export function apply(ctx: Context): void {
 
   ctx.tools.register(defineTool({
     name: 'ask_which',
-    description: '用户的说法对不上唯一一个事项或会话时（一个都对不上，或者两个以上都可能），列出候选让用户在卡片上点，不要猜。调用后这一轮结束；用户点了以后会发来“是事项「X」”“是会话「X」”或“都不是”。',
+    description: '用户的说法对不上唯一一个事项或会话时（一个都对不上，或者两个以上都可能），列出候选让用户选，不要猜。调用后这一轮结束；用户选了以后会发来“是事项「X」”“是会话「X」”或“都不是”。',
     parameters: {
       phrase: { type: 'string', required: true, description: '用户原话里的说法。' },
       candidates: {

@@ -353,7 +353,7 @@ export default class MyDsh extends TypertRemoteService {
       id, change, why, ...(phrase ? { phrase } : {}), at: new Date().toISOString(), state: 'pending', ...this.leaveCard(session, id, 'proposal'),
     };
     await this.assistant.update(state => ({ state: { ...state, proposals: keepNewest([...state.proposals, proposal], PROPOSALS_MAX) }, result: undefined }));
-    return { proposalId: id, card: proposalLine(change), next: '卡片已经给用户了，等用户点。' };
+    return { proposalId: id, change: proposalLine(change), next: '等用户确认。' };
   }
 
   /** Store a candidate question for the user to answer on its card. */
@@ -381,7 +381,7 @@ export default class MyDsh extends TypertRemoteService {
       id, phrase, candidates, why, at: new Date().toISOString(), state: 'pending', ...this.leaveCard(session, id, 'which'),
     };
     await this.assistant.update(state => ({ state: { ...state, questions: keepNewest([...state.questions, question], QUESTIONS_MAX) }, result: undefined }));
-    return { questionId: id, candidates: candidates.map(candidate => `${candidate.kind === 'matter' ? '事项' : '会话'}「${candidate.label}」`), next: '卡片已经给用户了，等用户选。' };
+    return { questionId: id, candidates: candidates.map(candidate => `${candidate.kind === 'matter' ? '事项' : '会话'}「${candidate.label}」`), next: '等用户选。' };
   }
 
   // ── my dsh's session ──────────────────────────────────────────────────────────────────────────────────────────────────────────
