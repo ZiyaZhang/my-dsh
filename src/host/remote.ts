@@ -363,7 +363,7 @@ export const matterGoal = (raw: string): string => line(raw, '目标', 0, GOAL_M
 /** A full path on the Host: `/…`, `~/…`, or a Windows drive or share path. */
 export function absolutePath(raw: string): string {
   const path = raw.trim();
-  if (!/^(\/|~\/|~$|[A-Za-z]:[\\/]|\\\\)/.test(path) || /[\r\n\0]/.test(path)) throw new RequestError('要写完整路径，比如 /Users/你/项目');
+  if (!/^(\/|~\/|~$|[A-Za-z]:[\\/]|\\\\)/.test(path) || /[\r\n\0]/.test(path)) throw new RequestError('要写完整路径，以 / 或 ~/ 开头');
   return path;
 }
 

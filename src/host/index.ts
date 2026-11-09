@@ -67,6 +67,8 @@ const TITLE_MAX = 60;
 const WHY_MAX = 200;
 const TASK_MAX = 20_000;
 const CANDIDATES_MAX = 6;
+/** Cards the snapshot carries for the dock and 全部记录. */
+const CARDS_MAX = 300;
 /** History records read for `session_recent`; enough for its last few replies. */
 const RECENT_MESSAGES = 16;
 
@@ -584,13 +586,14 @@ export default class MyDsh extends TypertRemoteService {
     });
   }
 
+  /** my dsh's session and the newest cards in it; cards from an earlier my dsh session stay out. */
   private assistantView(): AssistantView {
     const state = this.assistant.peek();
     const matters = this.store.list();
-    return {
-      sessionId: state.sessionId ?? null,
-      cards: [...state.proposals.map(proposalCard), ...state.questions.map(questionCard), ...receiptCards(state.activity, matters)],
-    };
+    const cards = [...state.proposals.map(proposalCard), ...state.questions.map(questionCard), ...receiptCards(state.activity, matters)]
+      .filter(card => card.sessionId === state.sessionId)
+      .sort((a, b) => a.turn - b.turn);
+    return { sessionId: state.sessionId ?? null, cards: keepNewest(cards, CARDS_MAX) };
   }
 
   private indexInput(): IndexInput {
