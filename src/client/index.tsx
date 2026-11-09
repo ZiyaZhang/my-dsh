@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
+import type {} from '@deepseek-ai/dsh-client-connection/client';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
@@ -7,6 +8,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SessionId } from '@deepseek-ai/dsh-session';
 import { MY_DSH_REMOTE, type MyDshRequest, type MyDshResult } from '../host/remote.js';
 import { BoardPage } from './BoardPage.js';
+import { BoardSource } from './board-source.js';
+import { Dialogs } from './dialogs.js';
+import { MatterDialogs } from './MatterDialog.js';
 import styles from './style.css';
 
 export type Call = <R extends MyDshRequest>(request: R, signal?: AbortSignal) => Promise<MyDshResult<R>>;
@@ -24,18 +28,35 @@ export async function apply(ctx: Context): Promise<void> {
     return () => style.remove();
   }, 'my-dsh: styles');
   const openSession = (sessionId: string) => { ctx.uiWorkspace.openSession(sessionId as SessionId); };
-  ctx.inject(['remote.mydsh'], ctx => {
+  const dialogs = new Dialogs();
+  ctx.inject(['remote.mydsh'], (ctx) => {
     const call: Call = async <R extends MyDshRequest>(request: R, signal?: AbortSignal) => {
       const result = await ctx.remote.mydsh.call(request, signal);
       if (!result.ok) throw new Error(result.error.message);
       return result.value as MyDshResult<R>;
     };
+    const source = new BoardSource({
+      fetch: signal => call({ action: 'snapshot' }, signal),
+      watch: signal => ctx.remote.mydsh.watch(signal),
+      onReset: (listener) => {
+        const dispose = ctx.on('connection/reset', listener);
+        return () => { dispose(); };
+      },
+      every: (run, ms) => {
+        const timer = setInterval(run, ms);
+        return () => { clearInterval(timer); };
+      },
+    });
+    const after = () => { void source.refresh(); };
     ctx.slots.inject('main', () => ctx.slots.register({
-      name: 'main', key: PANEL, inject: () => ({ call, openSession }),
+      name: 'main', key: PANEL, inject: () => ({ source, call, dialogs, openSession }),
     }, BoardPage));
     ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
       name: 'sidebar.panellist', id: PANEL, order: 0, label: () => '看板',
     }, ({ size }: { size?: number }) => <BoardIcon size={size ?? 18} />));
+    ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+      name: 'shell.overlay', id: 'my-dsh.dialogs', inject: () => ({ dialogs, call, after }),
+    }, MatterDialogs));
   });
 }
 

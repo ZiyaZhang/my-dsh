@@ -1,9 +1,110 @@
-.mydsh-page { height: 100%; overflow: auto; padding: 32px 48px; box-sizing: border-box; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
-.mydsh-head h1 { margin: 0 0 20px; font-size: 22px; font-weight: 600; }
-.mydsh-section h2 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 12px; font: var(--dsw-font-s-strong-14); }
-.mydsh-count { color: var(--dsw-alias-label-tertiary); font-weight: 400; }
+/* The board page. Frame and type follow DSH's own first-level pages (the Plugins and Automation pages); the board widens the column for
+   two card columns. Colors, radii and type come from the theme's --dsw-* tokens, so light and dark both work. */
+.mydsh-page { height: 100%; overflow: auto; scrollbar-gutter: stable; box-sizing: border-box; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 1.6; }
+.mydsh-column { box-sizing: border-box; max-width: 1104px; margin: 0 auto; padding: 0 clamp(24px, 4vw, 48px) 48px; }
+@media (max-width: 767px) { .mydsh-column { padding-inline: 20px; } }
+/* Zero specificity, so the classes below set their own margins. */
+:where(.mydsh-page) :where(h1, h2, h3, h4, p) { margin: 0; }
+.mydsh-page :focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+
+.mydsh-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 28px; margin-bottom: 14px; }
+.mydsh-head h1 { font-size: 20px; line-height: 28px; font-weight: 500; }
+/* macOS hidden-inset title bar: clear the window controls the way DSH's own pages do. */
+[data-platform='darwin'] .mydsh-head, [data-platform='darwin'] .mydsh-matter-head { padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px)); }
+
+.mydsh-section + .mydsh-section { margin-top: 32px; }
+.mydsh-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+.mydsh-section-head h2 { display: flex; align-items: baseline; font: var(--dsw-font-s-strong-14); }
+.mydsh-count { margin-left: 6px; font-weight: 400; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.mydsh-new { margin-right: -10px; color: var(--dsw-alias-label-secondary); }
 .mydsh-quiet { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xs-13); }
-.mydsh-error { color: var(--dsw-alias-state-error-primary); font: var(--dsw-font-xs-13); }
-.mydsh-card { border: 1px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-lg); padding: 14px 16px; margin-bottom: 12px; background: var(--dsw-alias-bg-layer-1); }
-.mydsh-card h3 { margin: 0 0 4px; font: var(--dsw-font-s-strong-14); }
-.mydsh-card p { margin: 0; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xs-13); }
+.mydsh-error { margin: 0 0 12px; color: var(--dsw-alias-state-error-primary); font: var(--dsw-font-xs-13); }
+.mydsh-empty { margin-top: 8px; padding: 0 2px; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
+.mydsh-mark { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 14px; height: 20px; }
+.mydsh-mark:empty { display: none; }
+
+/* Matter cards: name, goal, latest activity, the three latest sessions. */
+.mydsh-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+@media (max-width: 720px) { .mydsh-grid { grid-template-columns: minmax(0, 1fr); } }
+.mydsh-card { min-width: 0; padding: 16px 20px 14px; border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-layer-1); cursor: pointer; transition: border-color 100ms ease; }
+.mydsh-card:hover { border-color: var(--dsw-alias-border-l4); }
+.mydsh-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.mydsh-card-head h3 { min-width: 0; font-size: 18px; line-height: 26px; font-weight: 500; }
+.mydsh-card-name { display: block; max-width: 100%; padding: 0; border: 0; background: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.mydsh-card-head time { flex: none; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.mydsh-card-goal { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.mydsh-card-rows { display: flex; flex-direction: column; margin: 8px -8px 0; padding-top: 6px; border-top: .5px solid var(--dsw-alias-border-l2); }
+.mydsh-line { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 3px 8px; border: 0; border-radius: var(--dsw-radius-sm); background: none; font: inherit; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); text-align: left; cursor: pointer; }
+.mydsh-line:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.mydsh-line time { flex: none; min-width: 56px; font-size: 12px; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.mydsh-line-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mydsh-card-empty { margin-top: 12px; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-caption); }
+
+/* Folding boxes: 已归档 and the review days. */
+.mydsh-fold { border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-layer-1); }
+.mydsh-fold-head { display: flex; align-items: center; gap: 6px; width: 100%; height: 44px; padding: 0 16px; border: 0; border-radius: var(--dsw-radius-lg); background: none; font: var(--dsw-font-s-strong-14); color: var(--dsw-alias-label-primary); text-align: left; cursor: pointer; }
+.mydsh-fold-date { font-weight: 400; color: var(--dsw-alias-label-tertiary); }
+.mydsh-fold-chevron { flex: none; color: var(--dsw-alias-label-caption); transition: transform 100ms ease; }
+.mydsh-fold:not(.is-open) .mydsh-fold-chevron { transform: rotate(-90deg); }
+.mydsh-fold-list { display: flex; flex-direction: column; padding: 0 12px 10px; }
+.mydsh-archived { margin-top: 16px; }
+.mydsh-archived-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 8px 8px 4px; border-radius: var(--dsw-radius-md); cursor: pointer; }
+.mydsh-archived-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.mydsh-archived-lead { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 20px; color: var(--dsw-alias-label-tertiary); }
+.mydsh-archived-body { flex: 1; min-width: 0; }
+.mydsh-archived-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; font-size: 14px; line-height: 20px; }
+.mydsh-archived-title b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.mydsh-archived-title span { flex: none; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-tertiary); }
+.mydsh-archived-goal { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+
+/* Review: one box per day; a hairline runs through the state marks like a timeline. */
+.mydsh-review { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.mydsh-review-list { position: relative; padding: 0 12px 10px 16px; }
+.mydsh-review-list::before { content: ''; position: absolute; left: 91px; top: 0; bottom: 10px; width: .5px; background: var(--dsw-alias-border-l3); }
+.mydsh-review-row { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 8px 8px 8px 0; border-radius: var(--dsw-radius-md); cursor: pointer; }
+.mydsh-review-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.mydsh-review-row time { flex: none; width: 56px; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; text-align: right; }
+.mydsh-review-mark { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 14px; height: 20px; background: var(--dsw-alias-bg-layer-1); }
+.mydsh-review-row:hover .mydsh-review-mark { background: transparent; }
+.mydsh-review-title { display: flex; flex: 1; align-items: baseline; gap: 10px; min-width: 0; font-size: 14px; line-height: 20px; }
+.mydsh-review-title b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.mydsh-review-matter { flex: none; padding: 0; border: 0; background: none; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.mydsh-review-matter:hover { color: var(--dsw-alias-link); }
+
+/* One matter: breadcrumb and menu, the goal line, the sessions in three columns. */
+.mydsh-matter-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 28px; margin-bottom: 6px; }
+.mydsh-crumbs { display: inline-flex; align-items: center; gap: 4px; min-width: 0; margin-left: -8px; }
+.mydsh-crumb { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 8px; border: 0; border-radius: var(--dsw-radius-md); background: none; font: inherit; font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+button.mydsh-crumb { cursor: pointer; }
+button.mydsh-crumb:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.mydsh-crumb.is-current { font-weight: 500; color: var(--dsw-alias-label-primary); }
+.mydsh-crumb-sep { font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-caption); }
+.mydsh-icon-button { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.mydsh-icon-button:hover, .mydsh-icon-button.is-on { background: var(--dsw-alias-interactive-bg-hover); }
+.mydsh-matter-facts { margin-bottom: 16px; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.mydsh-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .mydsh-columns { grid-template-columns: minmax(0, 1fr); } }
+.mydsh-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 180px; padding: 10px; border: .5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-markdown-code-block); }
+.mydsh-col h4 { display: flex; align-items: baseline; padding: 2px 6px 0; font: var(--dsw-font-xs-strong-13); color: var(--dsw-alias-label-secondary); }
+.mydsh-col .mydsh-empty { margin: 0; padding: 0 6px; }
+.mydsh-session { min-width: 0; padding: 12px 14px 10px 16px; border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); cursor: pointer; transition: border-color 100ms ease; }
+.mydsh-session:hover { border-color: var(--dsw-alias-border-l4); }
+.mydsh-session-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mydsh-session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; line-height: 20px; }
+.mydsh-session-head time { flex: none; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.mydsh-session-step { margin-top: 2px; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); }
+.mydsh-session-step.is-failed { color: var(--dsw-alias-state-error-primary); }
+.mydsh-session-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.mydsh-session-workspace { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-tertiary); }
+.mydsh-session-actions { display: inline-flex; flex: none; align-items: center; gap: 12px; }
+.mydsh-link { padding: 0; border: 0; background: none; font: inherit; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--dsw-alias-link); cursor: pointer; }
+.mydsh-link:hover { text-decoration: underline dotted; }
+
+/* Matter dialogs (portaled to the body by DSH's Modal). */
+.mydsh-form { display: flex; flex-direction: column; gap: 14px; }
+.mydsh-field { display: flex; flex-direction: column; gap: 6px; }
+.mydsh-field > span { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.mydsh-input { box-sizing: border-box; width: 100%; height: 44px; padding: 7px 14px; border: .5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-lg); outline: none; background: transparent; font: inherit; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.mydsh-input:focus { border-color: var(--dsw-alias-state-business-primary); }
+.mydsh-input:disabled { color: var(--dsw-alias-label-dimmed); }
+.mydsh-form-error { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-state-error-primary); }
