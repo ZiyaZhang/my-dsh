@@ -1,6 +1,6 @@
 /**
- * my-dsh Host: the `mydsh/call` Remote over the matter store and the session index. Later milestones add the my dsh session, reports
- * and reminders here.
+ * my-dsh Host: the `mydsh/call` and `mydsh/watch` Remotes over the matter store and the session index. Later milestones add the my dsh
+ * session, reports and reminders here.
  */
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -11,8 +11,9 @@ import type {} from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-storage-domain';
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type {} from '@deepseek-ai/dsh-workspace';
+import { ChangeFeed } from './feed.js';
 import { addSession, archiveMatter, createMatter, removeSession, renameMatter, setGoal, unarchiveMatter } from './matters.js';
-import { RequestError, parseRequest, type BoardSnapshot, type MyDshRequest, type MyDshResponse } from './remote.js';
+import { RequestError, parseRequest, type BoardSnapshot, type MyDshRequest, type MyDshResponse, type WatchNotice } from './remote.js';
 import { SessionIndex, sessionView, type SessionRow } from './sessions.js';
 import { buildSnapshot, type WorkspaceFacts } from './snapshot.js';
 import { MatterStore } from './store.js';
@@ -38,6 +39,7 @@ export default class MyDsh extends TypertRemoteService {
   private readonly sessions: SessionIndex;
   private readonly ready: Promise<void>;
   private readonly lifetime = new AbortController();
+  private readonly feed = new ChangeFeed();
   /** The first session listing; cleared when it fails, so the next snapshot tries again. */
   private listing: Promise<void> | undefined;
 
@@ -54,7 +56,7 @@ export default class MyDsh extends TypertRemoteService {
     ctx.on('session/event', (session, event) => { this.sessions.event(session.id, event); }, { global: true });
     // Workspace titles, membership and the archive set live in the workspace domain.
     ctx.on('domain/changed', (change) => { if (change.domain === 'workspace') this.changed(); });
-    ctx.effect(() => () => { this.lifetime.abort(); }, 'my-dsh: lifetime');
+    ctx.effect(() => () => { this.lifetime.abort(); this.feed.close(); }, 'my-dsh: lifetime');
     this.ready = this.store.open();
     void this.ready.catch(() => undefined); // reported by [Service.init] and by every call
   }
@@ -91,8 +93,20 @@ export default class MyDsh extends TypertRemoteService {
     }
   }
 
+  /**
+   * Change notices for the board: one when the stream opens, then at most one per 300 ms while sessions or matters change; the client
+   * reads a new snapshot on each. The client mounts the hand-written `MY_DSH_WATCH_DESCRIPTOR`. The Gateway finds this method through
+   * `@Remote` and reads its parameter names (SRC mode), so `signal` must stay the only parameter.
+   */
+  @Remote({ mode: 'stream' })
+  async *watch(signal: AbortSignal): AsyncGenerator<WatchNotice, void, undefined> {
+    yield* this.feed.follow(signal);
+  }
+
   /** Something the board shows changed. */
-  private changed(): void {}
+  private changed(): void {
+    this.feed.touch();
+  }
 
   private async snapshot(): Promise<BoardSnapshot> {
     await this.loadSessions();
