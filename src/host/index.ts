@@ -63,6 +63,8 @@ export interface ToolCaller {
   signal: AbortSignal;
 }
 
+/** The title my dsh's session gets when the plugin makes it. */
+const ASSISTANT_TITLE = 'my dsh';
 const TITLE_MAX = 60;
 const WHY_MAX = 200;
 const TASK_MAX = 20_000;
@@ -405,6 +407,12 @@ export default class MyDsh extends TypertRemoteService {
     await mkdir(cwd, { recursive: true });
     const { sessionId } = await this.ctx.sessionController.create({ cwd, agentPreset: PRESET_ID });
     await this.assistant.update(state => ({ state: { ...state, sessionId }, result: undefined }));
+    // A title set by rename is pinned, so the first question does not give the session an automatic title.
+    try {
+      await this.ctx.sessionController.rename({ sessionId, title: ASSISTANT_TITLE });
+    } catch (error) {
+      this.ctx.logger.warn('my-dsh: my dsh\'s session could not be titled: %s', message(error));
+    }
     return sessionId;
   }
 
