@@ -1,7 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
 import type {} from '@deepseek-ai/dsh-client-connection/client';
+import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
+import { IconCloseOutlineRegular, IconGoalOutlineRegular, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
@@ -57,7 +59,50 @@ export async function apply(ctx: Context): Promise<void> {
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay', id: 'my-dsh.dialogs', inject: () => ({ dialogs, call, after }),
     }, MatterDialogs));
+    ctx.inject(['contextMenus'], (ctx) => { registerSessionMenu(ctx, call, dialogs, after); });
   });
+}
+
+const ICON_MATTER = 'my-dsh.matter';
+const ICON_NEW = 'my-dsh.new';
+const ICON_LEAVE = 'my-dsh.leave';
+
+/** 加入事项 with the matters in progress and 新建事项; 移出事项「name」 when the session is in one. */
+function registerSessionMenu(ctx: Context, call: Call, dialogs: Dialogs, after: () => void): void {
+  ctx.slots.inject('contextMenu.icon', function* () {
+    yield ctx.slots.register({ name: 'contextMenu.icon', key: ICON_MATTER }, IconGoalOutlineRegular);
+    yield ctx.slots.register({ name: 'contextMenu.icon', key: ICON_NEW }, IconPlusOutlineRegular);
+    yield ctx.slots.register({ name: 'contextMenu.icon', key: ICON_LEAVE }, IconCloseOutlineRegular);
+  });
+  ctx.effect(() => ctx.contextMenus.register({
+    // After 置顶, 重命名 and 分叉, before the session id and 归档.
+    id: 'my-dsh.matters', target: 'session', order: 350,
+    resolve: async ({ sessionId }, signal) => {
+      const snapshot = await call({ action: 'snapshot' }, signal);
+      const current = snapshot.matters.find(matter => matter.sessions.some(session => session.id === sessionId));
+      const others = snapshot.matters.filter(matter => !matter.archivedAt && matter.id !== current?.id);
+      const actions: MenuAction[] = [{
+        id: 'my-dsh.join', label: '加入事项', icon: { key: ICON_MATTER }, separatorBefore: true,
+        children: [
+          ...others.map((matter): MenuAction => ({
+            id: `my-dsh.join.${matter.id}`, label: matter.name, icon: { key: ICON_MATTER }, failureLabel: '加入事项失败',
+            run: async () => { await call({ action: 'addSession', matterId: matter.id, sessionId }); after(); },
+          })),
+          {
+            id: 'my-dsh.join.new', label: '新建事项', icon: { key: ICON_NEW }, separatorBefore: others.length > 0,
+            run: () => { dialogs.open({ kind: 'create', sessionId }); },
+          },
+        ],
+      }];
+      if (current) {
+        actions.push({
+          id: 'my-dsh.leave', label: `移出事项「${current.name}」`, icon: { key: ICON_LEAVE }, failureLabel: '移出事项失败',
+          run: async () => { await call({ action: 'removeSession', sessionId }); after(); },
+        });
+      }
+      return actions;
+    },
+  }), 'my-dsh: session menu');
 }
 
 /** Four squares, the board. */
