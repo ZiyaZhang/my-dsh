@@ -27,26 +27,30 @@ test('each proposal reads as one line of what will change', () => {
   assert.equal(proposalLine({ kind: 'rename', matterId: 'm-brief', oldName: '每周简报', name: '周报' }), '把「每周简报」改名为「周报」');
 });
 
-test('accepting a new matter creates it, with the user’s phrase as its first alias', () => {
+test('accepting a new matter creates it, with the user’s cleaned phrase as its first alias', () => {
   const { matters: after, matter, text } = applyProposal(matters(), proposal({ kind: 'new', name: '工作区切换性能', goal: '跟进卡顿' }, '切换卡顿那件'), { id: 'm-new', at: T1 });
-  assert.deepEqual(matter, { id: 'm-new', name: '工作区切换性能', goal: '跟进卡顿', sessions: [], aliases: ['切换卡顿那件'], sources: [], createdAt: T1 });
+  assert.deepEqual(matter, { id: 'm-new', name: '工作区切换性能', goal: '跟进卡顿', sessions: [], aliases: ['切换卡顿'], sources: [], createdAt: T1 });
   assert.equal(after.length, 3);
   assert.equal(text, '新起事项「工作区切换性能」，目标是跟进卡顿');
 });
 
-test('accepting a merge moves the sessions and keeps the old name, its aliases and the phrase as aliases', () => {
+test('accepting a merge moves the sessions and keeps the old name, its aliases and the cleaned phrase as aliases', () => {
   const change = { kind: 'merge' as const, fromId: 'm-draft', fromName: '周报草稿', intoId: 'm-brief', intoName: '每周简报' };
   const { matters: after, matter } = applyProposal(matters(), proposal(change, '那个周报'), { id: 'unused', at: T1 });
   assert.deepEqual(after.map(m => m.id), ['m-brief']);
   assert.deepEqual(matter.sessions.map(entry => entry.sessionId), ['s-1', 's-2', 's-3']);
-  assert.deepEqual(matter.aliases, ['那个周报', '周报草稿', '草稿', '周报']);
+  // 那个周报 leaves 周报, which the matter already had: it moves to the front.
+  assert.deepEqual(matter.aliases, ['周报', '周报草稿', '草稿']);
   refused(() => applyProposal(matters().slice(0, 1), proposal(change), { id: 'unused', at: T1 }), /没有这个事项/);
 });
 
-test('accepting a rename keeps the old name as an alias, and the phrase too', () => {
+test('accepting a rename keeps the old name as an alias, and the cleaned phrase too', () => {
   const { matter } = applyProposal(matters(), proposal({ kind: 'rename', matterId: 'm-brief', oldName: '每周简报', name: '周报汇总' }, '周五那个'), { id: 'unused', at: T1 });
   assert.equal(matter.name, '周报汇总');
-  assert.deepEqual(matter.aliases, ['周五那个', '每周简报', '周报']);
+  assert.deepEqual(matter.aliases, ['周五', '每周简报', '周报']);
+  // A phrase that only points stores nothing; the old name still does.
+  assert.deepEqual(applyProposal(matters(), proposal({ kind: 'rename', matterId: 'm-brief', oldName: '每周简报', name: '周报汇总' }, '那件事项'), { id: 'unused', at: T1 }).matter.aliases,
+    ['每周简报', '周报']);
 });
 
 test('a proposal is decided once; deciding it again or one that is gone is refused', () => {

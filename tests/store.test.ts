@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { ALIASES_MAX, RequestError, type Matter, type SessionLink } from '../src/host/remote.ts';
 import {
-  addAlias, addSession, archiveMatter, createMatter, linkOf, matterOf, mergeMatters, removeSession, renameMatter, setContext, setGoal, unarchiveMatter,
+  addAlias, addSession, archiveMatter, cleanPhrase, createMatter, linkOf, matterOf, mergeMatters, removeSession, renameMatter, setContext, setGoal,
+  unarchiveMatter,
 } from '../src/host/matters.ts';
 import { MatterStore, migrateMatters } from '../src/host/store.ts';
 
@@ -78,14 +79,41 @@ test('aliases stay at most ten per matter, newest first, without repeats or the 
   const again = addAlias(matters, 'm-notes', ' 说法5 ').matter;
   assert.deepEqual(again.aliases.slice(0, 2), ['说法5', '说法12']);
   assert.equal(again.aliases.length, 10);
-  assert.deepEqual(addAlias(sample(), 'm-brief', 'Weekly  PR').matter.aliases, ['Weekly PR', '周报']);
-  assert.deepEqual(addAlias(addAlias(sample(), 'm-brief', 'Weekly PR').matters, 'm-brief', 'weekly pr').matter.aliases, ['weekly pr', '周报']);
+  assert.deepEqual(addAlias(sample(), 'm-brief', 'Weekly  brief').matter.aliases, ['Weekly brief', '周报']);
+  assert.deepEqual(addAlias(addAlias(sample(), 'm-brief', 'Weekly brief').matters, 'm-brief', 'weekly brief').matter.aliases, ['weekly brief', '周报']);
   // The name itself, an empty phrase, a second line or a very long phrase is not stored.
   assert.deepEqual(addAlias(sample(), 'm-brief', '每周简报').matter.aliases, ['周报']);
   assert.deepEqual(addAlias(sample(), 'm-brief', '  ').matter.aliases, ['周报']);
   assert.deepEqual(addAlias(sample(), 'm-brief', '周报\n第二行').matter.aliases, ['周报']);
   assert.deepEqual(addAlias(sample(), 'm-brief', '长'.repeat(41)).matter.aliases, ['周报']);
   refused(() => addAlias(sample(), 'm-gone', '周报'), /没有这个事项/);
+});
+
+test('a phrase loses its pointing words, generic nouns and question words, and needs two characters left to be an alias', () => {
+  assert.equal(cleanPhrase('那件事项'), undefined);
+  assert.equal(cleanPhrase('周报那件'), '周报');
+  assert.equal(cleanPhrase('那件事项现在怎么样了'), undefined);
+  assert.equal(cleanPhrase('那个项目'), undefined);
+  assert.equal(cleanPhrase('之前那个 PR'), undefined);
+  assert.equal(cleanPhrase('刚才那条会话'), undefined);
+  assert.equal(cleanPhrase('上回那个东西'), undefined);
+  assert.equal(cleanPhrase('这个文档呢'), undefined);
+  assert.equal(cleanPhrase('它'), undefined);
+  assert.equal(cleanPhrase('报'), undefined);
+  assert.equal(cleanPhrase('周报那件事现在怎么样了？'), '周报');
+  assert.equal(cleanPhrase('上次的切换卡顿任务'), '切换卡顿');
+  assert.equal(cleanPhrase('PR评审那个'), '评审');
+  assert.equal(cleanPhrase('pr 4321 那条'), '4321');
+  assert.equal(cleanPhrase('Weekly  brief'), 'Weekly brief');
+  // pr inside a word is part of the word.
+  assert.equal(cleanPhrase('approve flow'), 'approve flow');
+});
+
+test('addAlias keeps the cleaned phrase, and nothing when only pointing words were said', () => {
+  assert.deepEqual(addAlias(sample(), 'm-notes', '那件事项').matter.aliases, []);
+  assert.deepEqual(addAlias(sample(), 'm-notes', '那件事项现在怎么样了').matter.aliases, []);
+  assert.deepEqual(addAlias(sample(), 'm-notes', '发布那件事').matter.aliases, ['发布']);
+  assert.deepEqual(addAlias(sample(), 'm-brief', '周报那件').matter.aliases, ['周报']);
 });
 
 test('archiveMatter stamps the time once; unarchiveMatter clears it', () => {

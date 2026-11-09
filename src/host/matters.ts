@@ -38,6 +38,28 @@ function aliasText(phrase: string): string | undefined {
 
 const sameWords = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
+/** Words that point at a thing or name only its kind, and question words; none of them tells one matter from another. */
+const VAGUE_WORDS = ['怎么样', '这个', '那个', '这件', '那件', '这条', '那条', '之前', '刚才', '上次', '上回', '事项', '项目', '事情', '东西', '会话', '任务', '文档', '现在'];
+/** Single characters of the same sort, taken off the ends of what is left. */
+const EDGE_CHARACTERS = new Set(['这', '那', '它', '事', '了', '吗', '呢', '的']);
+
+/**
+ * The part of a phrase that can name a matter: without punctuation, pointing and time words, generic nouns and question words.
+ * @returns the cleaned phrase, or undefined when fewer than two letters or digits are left.
+ */
+export function cleanPhrase(phrase: string): string | undefined {
+  let text = phrase.replace(/[\p{P}\p{S}]/gu, ' ').replace(/\bpr\b/gi, ' ');
+  for (const word of VAGUE_WORDS) text = text.split(word).join(' ');
+  const words = text.split(/\s+/).map((word) => {
+    const characters = [...word];
+    while (characters.length > 0 && EDGE_CHARACTERS.has(characters[0]!)) characters.shift();
+    while (characters.length > 0 && EDGE_CHARACTERS.has(characters.at(-1)!)) characters.pop();
+    return characters.join('');
+  }).filter(Boolean);
+  const cleaned = words.join(' ');
+  return [...cleaned].filter(character => /[\p{L}\p{N}]/u.test(character)).length >= 2 ? cleaned : undefined;
+}
+
 /** `phrases` put in front of the aliases, newest first, without repeats, the matter's own name, or more than ALIASES_MAX. */
 function withAliases(matter: Matter, phrases: readonly string[]): Matter {
   const next: string[] = [];
@@ -102,9 +124,10 @@ export function setGoal(matters: readonly Matter[], id: string, goal: string): C
   return replace(matters, id, matter => ({ ...matter, goal }));
 }
 
-/** Remember a phrase the user used for the matter. A phrase that cannot be an alias changes nothing. */
+/** Remember the words the user used for the matter, cleaned by {@link cleanPhrase}. A phrase that leaves nothing changes nothing. */
 export function addAlias(matters: readonly Matter[], id: string, phrase: string): Changed {
-  return replace(matters, id, matter => withAliases(matter, [phrase]));
+  const cleaned = /[\r\n]/.test(phrase) ? undefined : cleanPhrase(phrase);
+  return replace(matters, id, matter => cleaned === undefined ? matter : withAliases(matter, [cleaned]));
 }
 
 /** Archiving an archived matter keeps its first archive time. */
