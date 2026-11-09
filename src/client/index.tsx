@@ -5,11 +5,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SessionId } from '@deepseek-ai/dsh-session';
-import { MY_DSH_REMOTE, type MyDshRequest, type MyDshResponse } from '../host/remote.js';
+import { MY_DSH_REMOTE, type MyDshRequest, type MyDshResult } from '../host/remote.js';
 import { BoardPage } from './BoardPage.js';
 import styles from './style.css';
 
-export type Call = (request: MyDshRequest, signal?: AbortSignal) => Promise<MyDshResponse>;
+export type Call = <R extends MyDshRequest>(request: R, signal?: AbortSignal) => Promise<MyDshResult<R>>;
 
 const PANEL = 'my-dsh' as MainPanelId;
 export const inject = ['slots', 'layout', 'remote', 'uiWorkspace'];
@@ -25,10 +25,10 @@ export async function apply(ctx: Context): Promise<void> {
   }, 'my-dsh: styles');
   const openSession = (sessionId: string) => { ctx.uiWorkspace.openSession(sessionId as SessionId); };
   ctx.inject(['remote.mydsh'], ctx => {
-    const call: Call = async (request, signal) => {
+    const call: Call = async <R extends MyDshRequest>(request: R, signal?: AbortSignal) => {
       const result = await ctx.remote.mydsh.call(request, signal);
       if (!result.ok) throw new Error(result.error.message);
-      return result.value;
+      return result.value as MyDshResult<R>;
     };
     ctx.slots.inject('main', () => ctx.slots.register({
       name: 'main', key: PANEL, inject: () => ({ call, openSession }),

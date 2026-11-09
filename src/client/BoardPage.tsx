@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Matter } from '../host/remote.js';
+import type { BoardMatter } from '../host/remote.js';
 import type { Call } from './index.js';
 
-type State = { kind: 'loading' } | { kind: 'ready'; matters: Matter[] } | { kind: 'failed'; message: string };
+type State = { kind: 'loading' } | { kind: 'ready'; matters: BoardMatter[] } | { kind: 'failed'; message: string };
 
 /** The board page. This first version reads the matters from the Host and lists the ones in progress. */
 export function BoardPage({ call }: { call: Call; openSession: (sessionId: string) => void }) {
