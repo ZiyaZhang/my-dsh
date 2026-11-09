@@ -156,3 +156,33 @@ button.mydsh-crumb:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .mydsh-activity-row.is-undone .mydsh-activity-text { font-weight: 400; color: var(--dsw-alias-label-secondary); }
 .mydsh-activity-why { margin-top: 2px; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
 .mydsh-activity-row .mydsh-link { flex: none; font-size: 13px; line-height: 20px; }
+
+/* A matter's context: in the dialogs (主工作区, 上下文 with chips, 添加 and 指令) and under a matter's goal line. */
+.mydsh-select { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 12px; text-align: left; cursor: pointer; }
+.mydsh-select > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mydsh-select svg { flex: none; color: var(--dsw-alias-label-tertiary); }
+.mydsh-select-empty { color: var(--dsw-alias-label-tertiary); }
+.mydsh-select-item { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mydsh-field > span em { margin-left: 6px; font-style: normal; color: var(--dsw-alias-label-tertiary); }
+.mydsh-context { margin: -6px -8px; padding: 6px 8px; border-radius: var(--dsw-radius-md); transition: background-color 100ms ease; }
+.mydsh-context.is-dragging { background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 0 0 0 1px var(--dsw-alias-state-business-primary); }
+.mydsh-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 28px; }
+.mydsh-chip { display: inline-flex; align-items: center; max-width: 100%; height: 28px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-module-platform); font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); }
+.mydsh-chip-body { display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 100%; padding: 0 8px; color: inherit; text-decoration: none; }
+.mydsh-chip-body > svg { flex: none; color: var(--dsw-alias-label-tertiary); }
+a.mydsh-chip-body:hover .mydsh-chip-label { text-decoration: underline dotted; }
+.mydsh-chip-label { min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mydsh-chip-remove { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin: 0 5px 0 -4px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.mydsh-chip-remove:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.mydsh-chip-add { padding: 0 2px; font-size: 13px; line-height: 28px; }
+.mydsh-chip-note { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); }
+.mydsh-entry { display: flex; align-items: center; gap: 6px; }
+.mydsh-entry .mydsh-input { flex: 1; height: 32px; padding: 4px 12px; border-radius: var(--dsw-radius-md); }
+.mydsh-subfield { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.mydsh-subfield > span { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-tertiary); }
+.mydsh-textarea { height: auto; min-height: 64px; resize: vertical; }
+.mydsh-matter-context { display: flex; flex-direction: column; gap: 6px; margin: -8px 0 16px; font: var(--dsw-font-xs-13); }
+.mydsh-matter-context > div { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.mydsh-matter-context dt { flex: none; width: 56px; color: var(--dsw-alias-label-tertiary); }
+.mydsh-matter-context dd { flex: 1; min-width: 0; margin: 0; color: var(--dsw-alias-label-secondary); }
+.mydsh-matter-instructions { white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

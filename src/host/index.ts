@@ -10,6 +10,7 @@ import { join, resolve } from 'node:path';
 import { Context, Service } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type {} from '@deepseek-ai/dsh-agent-preset-registry';
+import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type { SessionRequestId, SessionSummary } from '@deepseek-ai/dsh-api-session-controller';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import { appendPluginRecord, type Session, type SessionId } from '@deepseek-ai/dsh-session';
@@ -21,8 +22,9 @@ import { AssistantStore } from './assistant-store.js';
 import { buildBoardIndex, chooseWorkspace, fillWorkspaces, indexContext, type BoardIndex, type IndexInput } from './board-index.js';
 import { CorrectionLog, declineCorrection, membershipCorrection, pickCorrection, undoCorrection } from './corrections.js';
 import { ChangeFeed } from './feed.js';
+import { checkPath, resolveSources, type ReadUpload } from './matter-files.js';
 import {
-  addAlias, addSession, archiveMatter, createMatter, linkOf, removeSession, renameMatter, setGoal, unarchiveMatter,
+  addAlias, addSession, archiveMatter, createMatter, linkOf, removeSession, renameMatter, setContext, setGoal, unarchiveMatter, type MatterContext,
 } from './matters.js';
 import { MY_DSH_PRESET, PRESET_ID } from './prompt.js';
 import {
@@ -30,7 +32,7 @@ import {
 } from './proposals.js';
 import {
   ALIAS_MAX, RequestError, line, matterGoal, matterName, parseRequest,
-  type ActivityView, type AssistantView, type BoardSnapshot, type CardPlace, type Matter, type MyDshRequest, type MyDshResponse, type Proposal,
+  type ActivityView, type AssistantView, type BoardSnapshot, type CardPlace, type ContextInput, type Matter, type MyDshRequest, type MyDshResponse, type Proposal,
   type ProposalChange, type WatchNotice, type WhichCandidate, type WhichQuestion,
 } from './remote.js';
 import { recentReplies, trackTurn, type TurnState } from './session-text.js';
@@ -160,7 +162,17 @@ export default class MyDsh extends TypertRemoteService {
       const now = () => new Date().toISOString();
       switch (parsed.action) {
         case 'snapshot': return await this.snapshot();
-        case 'createMatter': return await this.store.update(matters => createMatter(matters, parsed, { id: randomUUID(), at: now() }));
+        case 'createMatter': {
+          const id = randomUUID();
+          const context = await this.matterContext(parsed, id, signal);
+          return await this.store.update(matters => createMatter(matters, { name: parsed.name, goal: parsed.goal, ...context }, { id, at: now() }));
+        }
+        case 'setContext': {
+          if (!this.store.list().some(matter => matter.id === parsed.id)) throw new RequestError('没有这个事项');
+          const context = await this.matterContext(parsed, parsed.id, signal);
+          return await this.store.update(matters => setContext(matters, parsed.id, context));
+        }
+        case 'checkPath': return await checkPath(parsed.path);
         case 'renameMatter': return await this.store.update(matters => renameMatter(matters, parsed.id, parsed.name));
         case 'setGoal': return await this.store.update(matters => setGoal(matters, parsed.id, parsed.goal));
         case 'archiveMatter': return await this.store.update(matters => archiveMatter(matters, parsed.id, now()));
@@ -417,6 +429,21 @@ export default class MyDsh extends TypertRemoteService {
 
   // ── changes by hand and on cards ──────────────────────────────────────────────────────────────────────────────────────────────
 
+  /** A context from a dialog, checked: the workspace exists, paths exist, links are read again, uploads are copied into the matter's folder. */
+  private async matterContext(input: Partial<ContextInput>, matterId: string, signal: AbortSignal): Promise<MatterContext> {
+    const workspaceId = input.workspaceId ?? undefined;
+    if (workspaceId && !this.ctx.workspaceRegistry.get(workspaceId as WorkspaceId)) throw new RequestError('没有这个工作区');
+    const sources = await resolveSources(input.sources ?? [], { read: this.uploads(), files: join(this.directory, 'matters', matterId, 'files'), signal });
+    return { ...(workspaceId ? { workspaceId } : {}), sources, ...(input.instructions ? { instructions: input.instructions } : {}) };
+  }
+
+  /** Reads files uploaded through DSH, when this DSH keeps an attachment store. */
+  private uploads(): ReadUpload | undefined {
+    const attachments = this.ctx.get('attachments');
+    if (!attachments) return undefined;
+    return (upload, signal) => attachments.readFileStream({ attachmentId: upload.attachmentId, name: upload.name, bytes: upload.bytes } as FileAttachmentRef, signal);
+  }
+
   private async fileByHand(matterId: string, sessionId: string): Promise<Matter> {
     await this.requireSession(sessionId);
     if (sessionId === this.assistant.peek().sessionId) throw new RequestError('my dsh 自己不能放进事项');
@@ -634,10 +661,14 @@ export default class MyDsh extends TypertRemoteService {
   }
 
   private workspaceFacts(): WorkspaceFacts {
-    const workspaceOf = new Map<string, string>();
-    for (const workspace of this.ctx.workspaceRegistry.list()) {
-      for (const sessionId of workspace.sessionIds) if (!workspaceOf.has(sessionId)) workspaceOf.set(sessionId, workspace.title);
+    const workspaceOf = new Map<string, { id: string; title: string }>();
+    const list = this.ctx.workspaceRegistry.list();
+    for (const workspace of list) {
+      for (const sessionId of workspace.sessionIds) if (!workspaceOf.has(sessionId)) workspaceOf.set(sessionId, { id: workspace.id, title: workspace.title });
     }
-    return { workspaceOf, archived: new Set(this.ctx.workspaceRegistry.archivedSessionIds) };
+    return {
+      workspaceOf, archived: new Set(this.ctx.workspaceRegistry.archivedSessionIds),
+      list: list.map(workspace => ({ id: workspace.id, title: workspace.title, path: workspace.path })),
+    };
   }
 }

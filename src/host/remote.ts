@@ -78,6 +78,7 @@ export interface BoardSession {
   lastActivity: number;
   /** Title of the workspace the session belongs to. */
   workspace?: string;
+  workspaceId?: string;
   /** Archived in DSH, so hidden from the sidebar. */
   archived?: true;
 }
@@ -86,6 +87,10 @@ export interface BoardMatter {
   id: string;
   name: string;
   goal: string;
+  /** Its main workspace, while it exists. */
+  workspace?: { id: string; title: string };
+  sources: MatterSource[];
+  instructions?: string;
   createdAt: string;
   archivedAt?: string;
   /** Newest activity first. Ids the session list does not know are left out. */
@@ -118,6 +123,10 @@ export interface BoardSnapshot {
   review: ReviewDay[];
   /** my dsh's session and the cards under its turns. */
   assistant: AssistantView;
+  /** DSH's workspaces, for picking a matter's main workspace. */
+  workspaces: { id: string; title: string; path: string }[];
+  /** The workspace of the most recently active session that has one. */
+  recentWorkspaceId?: string;
   /** Host time the snapshot was taken, epoch ms. */
   now: number;
 }
@@ -220,7 +229,7 @@ export interface AssistantView {
 
 export type MyDshRequest =
   | { action: 'snapshot' }
-  | { action: 'createMatter'; name: string; goal: string }
+  | ({ action: 'createMatter'; name: string; goal: string } & Partial<ContextInput>)
   | { action: 'renameMatter'; id: string; name: string }
   | { action: 'setGoal'; id: string; goal: string }
   | { action: 'archiveMatter'; id: string }
@@ -232,7 +241,24 @@ export type MyDshRequest =
   | { action: 'undo'; id: string }
   | { action: 'acceptProposal'; id: string }
   | { action: 'declineProposal'; id: string }
-  | { action: 'answerWhich'; id: string; candidateId: string | null };
+  | { action: 'answerWhich'; id: string; candidateId: string | null }
+  | ({ action: 'setContext'; id: string } & ContextInput)
+  | { action: 'checkPath'; path: string };
+
+/** A file dropped or picked in the browser and uploaded through DSH; the Host copies it into the matter's folder. */
+export interface UploadSource {
+  kind: 'upload';
+  attachmentId: string;
+  name: string;
+  bytes: number;
+}
+
+/** A matter's context as the dialogs send it. `workspaceId: null` clears the main workspace; no instructions clears them. */
+export interface ContextInput {
+  workspaceId: string | null;
+  sources: (MatterSource | UploadSource)[];
+  instructions?: string;
+}
 
 /** The result of each action. A change returns the matter it changed; `removeSession` returns null when the session was in none. */
 export interface MyDshResults {
@@ -253,6 +279,9 @@ export interface MyDshResults {
   acceptProposal: Proposal;
   declineProposal: Proposal;
   answerWhich: WhichQuestion;
+  setContext: Matter;
+  /** The path as a source, once the Host found it. */
+  checkPath: MatterSource;
 }
 export type MyDshResponse = MyDshResults[keyof MyDshResults];
 export type MyDshResult<R extends MyDshRequest> = MyDshResults[R['action']];
@@ -283,7 +312,17 @@ const FIELDS: { [A in MyDshRequest['action']]: readonly string[] } = {
   acceptProposal: ['id'],
   declineProposal: ['id'],
   answerWhich: ['id', 'candidateId'],
+  setContext: ['id', 'workspaceId', 'sources', 'instructions'],
+  checkPath: ['path'],
 };
+
+/** Fields an action may leave out. */
+const OPTIONAL: { [A in MyDshRequest['action']]?: readonly string[] } = {
+  createMatter: ['workspaceId', 'sources', 'instructions'],
+};
+
+export const SOURCES_MAX = 30;
+export const INSTRUCTIONS_MAX = 2_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -321,19 +360,55 @@ export function line(raw: string, label: string, min: number, max: number): stri
 export const matterName = (raw: string): string => line(raw, '名字', 1, NAME_MAX);
 export const matterGoal = (raw: string): string => line(raw, '目标', 0, GOAL_MAX);
 
+/** A full path on the Host: `/…`, `~/…`, or a Windows drive or share path. */
+export function absolutePath(raw: string): string {
+  const path = raw.trim();
+  if (!/^(\/|~\/|~$|[A-Za-z]:[\\/]|\\\\)/.test(path) || /[\r\n\0]/.test(path)) throw new RequestError('要写完整路径，比如 /Users/你/项目');
+  return path;
+}
+
+function source(raw: unknown): MatterSource | UploadSource {
+  if (!isRecord(raw)) throw new RequestError('来源必须是对象');
+  if (raw.kind === 'upload') {
+    if (typeof raw.attachmentId !== 'string' || !/^[^\s\p{Cc}]{1,200}$/u.test(raw.attachmentId) || typeof raw.name !== 'string' || raw.name.trim() === ''
+      || typeof raw.bytes !== 'number' || !Number.isSafeInteger(raw.bytes) || raw.bytes < 0) throw new RequestError('上传的文件不完整');
+    return { kind: 'upload', attachmentId: raw.attachmentId, name: raw.name, bytes: raw.bytes };
+  }
+  if (!SOURCE_KINDS.includes(raw.kind as SourceKind)) throw new RequestError('来源的种类不对');
+  if (typeof raw.value !== 'string' || raw.value.trim() === '') throw new RequestError('来源不能为空');
+  if (raw.title !== undefined && typeof raw.title !== 'string') throw new RequestError('来源的名字必须是文字');
+  return { kind: raw.kind as SourceKind, value: raw.value.trim(), ...(typeof raw.title === 'string' && raw.title ? { title: raw.title } : {}) };
+}
+
+/** The context fields of createMatter and setContext. */
+function contextInput(value: Record<string, unknown>): ContextInput {
+  const workspaceId = value.workspaceId === undefined || value.workspaceId === null ? null : id(value, 'workspaceId');
+  const sources = value.sources ?? [];
+  if (!Array.isArray(sources)) throw new RequestError('sources 必须是列表');
+  if (sources.length > SOURCES_MAX) throw new RequestError(`来源最多 ${SOURCES_MAX} 个`);
+  const raw = value.instructions === undefined ? '' : text(value, 'instructions');
+  const instructions = raw.trim();
+  if ([...instructions].length > INSTRUCTIONS_MAX) throw new RequestError(`指令最多 ${INSTRUCTIONS_MAX} 个字`);
+  return { workspaceId, sources: sources.map(source), ...(instructions ? { instructions } : {}) };
+}
+
 /** Takes the listed actions only, each with exactly its fields; returns a fresh, trimmed copy or throws a RequestError whose message the page shows. */
 export function parseRequest(value: unknown): MyDshRequest {
   if (!isRecord(value)) throw new RequestError('my-dsh 请求必须是一个 JSON 对象');
   const action = value.action;
   if (!isAction(action)) throw new RequestError(`没有这个操作：${JSON.stringify(action)}`);
   const fields = FIELDS[action];
-  const extra = Object.keys(value).filter(key => key !== 'action' && !fields.includes(key));
+  const optional = OPTIONAL[action] ?? [];
+  const extra = Object.keys(value).filter(key => key !== 'action' && !fields.includes(key) && !optional.includes(key));
   if (extra.length) throw new RequestError(`${action} 不接受这些字段：${extra.join('、')}`);
   const missing = fields.filter(field => !Object.hasOwn(value, field));
   if (missing.length) throw new RequestError(`${action} 缺少字段：${missing.join('、')}`);
   switch (action) {
     case 'snapshot': return { action };
-    case 'createMatter': return { action, name: matterName(text(value, 'name')), goal: matterGoal(text(value, 'goal')) };
+    case 'createMatter': return {
+      action, name: matterName(text(value, 'name')), goal: matterGoal(text(value, 'goal')),
+      ...(Object.hasOwn(value, 'workspaceId') || Object.hasOwn(value, 'sources') || Object.hasOwn(value, 'instructions') ? contextInput(value) : {}),
+    };
     case 'renameMatter': return { action, id: id(value, 'id'), name: matterName(text(value, 'name')) };
     case 'setGoal': return { action, id: id(value, 'id'), goal: matterGoal(text(value, 'goal')) };
     case 'archiveMatter': return { action, id: id(value, 'id') };
@@ -346,6 +421,8 @@ export function parseRequest(value: unknown): MyDshRequest {
     case 'acceptProposal': return { action, id: id(value, 'id') };
     case 'declineProposal': return { action, id: id(value, 'id') };
     case 'answerWhich': return { action, id: id(value, 'id'), candidateId: value.candidateId === null ? null : id(value, 'candidateId') };
+    case 'setContext': return { action, id: id(value, 'id'), ...contextInput(value) };
+    case 'checkPath': return { action, path: absolutePath(text(value, 'path')) };
   }
 }
 

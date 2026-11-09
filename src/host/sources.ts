@@ -2,10 +2,9 @@
  * A matter's context: what a pasted link is, what a checked path is called, how a source reads, and the bounds on instructions. No
  * Node imports, so the client bundle uses the same rules when it shows a source before saving.
  */
-import { RequestError, type MatterSource, type SourceKind } from './remote.js';
+import { INSTRUCTIONS_MAX, RequestError, SOURCES_MAX, type MatterSource, type SourceKind } from './remote.js';
 
-export const INSTRUCTIONS_MAX = 2_000;
-export const SOURCES_MAX = 30;
+export { INSTRUCTIONS_MAX, SOURCES_MAX };
 
 /** Feishu and Lark hosts, and the paths their documents live under. */
 const DOC_HOST = /(^|\.)(feishu\.cn|feishu\.net|larksuite\.com|larksuite\.cn|larkoffice\.com)$/i;

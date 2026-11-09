@@ -4,7 +4,9 @@ export type DialogRequest =
   /** `sessionId`: the session to put in the new matter, when the session context menu asked. */
   | { kind: 'create'; sessionId?: string }
   | { kind: 'rename'; matterId: string; name: string }
-  | { kind: 'goal'; matterId: string; goal: string };
+  | { kind: 'goal'; matterId: string; goal: string }
+  /** 编辑上下文: the main workspace, the sources and the instructions. */
+  | { kind: 'context'; matterId: string };
 
 export class Dialogs {
   private request: DialogRequest | null = null;

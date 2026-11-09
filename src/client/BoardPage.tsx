@@ -4,6 +4,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { BoardMatter, BoardSession, BoardSnapshot, ReviewDay } from '../host/remote.js';
 import { ActivityDialog } from './ActivityDialog.js';
+import { SourceChip } from './ContextFields.js';
 import type { BoardSource } from './board-source.js';
 import { Dock, type DockSlots, type OpenDock } from './Dock.js';
 import type { Dialogs } from './dialogs.js';
@@ -96,6 +97,7 @@ function BoardContent({ source, call, dialogs, openSession }: Omit<BoardPageProp
         openSession={openSession}
         rename={() => { dialogs.open({ kind: 'rename', matterId: matter.id, name: matter.name }); }}
         editGoal={() => { dialogs.open({ kind: 'goal', matterId: matter.id, goal: matter.goal }); }}
+        editContext={() => { dialogs.open({ kind: 'context', matterId: matter.id }); }}
         archive={() => { act(() => call({ action: matter.archivedAt ? 'unarchiveMatter' : 'archiveMatter', id: matter.id })); }}
         remove={(sessionId) => { act(() => call({ action: 'removeSession', sessionId })); }}
       />
@@ -256,7 +258,7 @@ const COLUMNS = [['waiting', '等待输入'], ['running', '工作中'], ['idle',
 const column = (session: BoardSession): typeof COLUMNS[number][0] => (session.state === 'failed' ? 'idle' : session.state);
 const STEP: Partial<Record<string, string>> = { question: '在等你回答', approval: '在等你批准' };
 
-function MatterView({ matter, now, notice, back, openSession, rename, editGoal, archive, remove }: {
+function MatterView({ matter, now, notice, back, openSession, rename, editGoal, editContext, archive, remove }: {
   matter: BoardMatter;
   now: number;
   notice: string | null;
@@ -264,6 +266,7 @@ function MatterView({ matter, now, notice, back, openSession, rename, editGoal, 
   openSession: (sessionId: string) => void;
   rename: () => void;
   editGoal: () => void;
+  editContext: () => void;
   archive: () => void;
   remove: (sessionId: string) => void;
 }) {
@@ -286,16 +289,21 @@ function MatterView({ matter, now, notice, back, openSession, rename, editGoal, 
               <IconEllipsisOutlineRegular size={15} />
             </button>
           )}
-          items={[{ id: 'rename', label: '改名' }, { id: 'goal', label: '改目标' }, { id: 'archive', label: matter.archivedAt ? '恢复' : '归档' }]}
+          items={[
+            { id: 'rename', label: '改名' }, { id: 'goal', label: '改目标' }, { id: 'context', label: '编辑上下文' },
+            { id: 'archive', label: matter.archivedAt ? '恢复' : '归档' },
+          ]}
           onSelect={(id) => {
             setMenu(false);
             if (id === 'rename') rename();
             else if (id === 'goal') editGoal();
+            else if (id === 'context') editContext();
             else archive();
           }}
         />
       </header>
       <p className="mydsh-matter-facts">{facts}</p>
+      <MatterContext matter={matter} />
       {notice && <p className="mydsh-error">{notice}</p>}
       <div className="mydsh-columns">
         {COLUMNS.map(([key, label]) => {
@@ -311,6 +319,20 @@ function MatterView({ matter, now, notice, back, openSession, rename, editGoal, 
         })}
       </div>
     </Page>
+  );
+}
+
+/** The matter's context under its goal line: main workspace, instructions, sources. */
+function MatterContext({ matter }: { matter: BoardMatter }) {
+  if (!matter.workspace && !matter.instructions && matter.sources.length === 0) return null;
+  return (
+    <dl className="mydsh-matter-context">
+      {matter.workspace && <div><dt>主工作区</dt><dd>{matter.workspace.title}</dd></div>}
+      {matter.instructions && <div><dt>指令</dt><dd className="mydsh-matter-instructions">{matter.instructions}</dd></div>}
+      {matter.sources.length > 0 && (
+        <div><dt>来源</dt><dd className="mydsh-chips">{matter.sources.map(source => <SourceChip key={source.value} source={source} />)}</dd></div>
+      )}
+    </dl>
   );
 }
 

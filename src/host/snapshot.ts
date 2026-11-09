@@ -9,10 +9,12 @@ export const REVIEW_DAYS = 14;
 
 /** What the workspace registry says about sessions. */
 export interface WorkspaceFacts {
-  /** Title of the workspace each attached session belongs to. */
-  workspaceOf: ReadonlyMap<string, string>;
+  /** The workspace each attached session belongs to. */
+  workspaceOf: ReadonlyMap<string, { id: string; title: string }>;
   /** Sessions archived in DSH. */
   archived: ReadonlySet<string>;
+  /** Every workspace, in the registry's order. */
+  list: readonly { id: string; title: string; path: string }[];
 }
 
 export interface SnapshotInput {
@@ -65,18 +67,22 @@ export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
     const workspace = workspaces.workspaceOf.get(view.id);
     return {
       id: view.id, title: displayTitle(view), state: view.state, ...(view.wait ? { wait: view.wait } : {}),
-      lastActivity: view.lastActivity, ...(workspace !== undefined ? { workspace } : {}),
+      lastActivity: view.lastActivity, ...(workspace !== undefined ? { workspace: workspace.title, workspaceId: workspace.id } : {}),
       ...(workspaces.archived.has(view.id) ? { archived: true as const } : {}),
     };
   };
+  const named = new Map(workspaces.list.map(workspace => [workspace.id, workspace.title]));
   /** What the DSH sidebar shows: no subagents, no blank sessions, nothing archived; and never my dsh's own session. */
   const listed = (view: SessionView) => !view.subagent && !view.blank && !workspaces.archived.has(view.id) && !own(view);
 
   const matters: BoardMatter[] = input.matters.map((matter) => {
     const sessions = matter.sessions.flatMap(link => { const view = views.get(link.sessionId); return view ? [board(view)] : []; }).sort(newestFirst);
+    const workspace = matter.workspaceId ? named.get(matter.workspaceId) : undefined;
     return {
-      id: matter.id, name: matter.name, goal: matter.goal, createdAt: matter.createdAt,
-      ...(matter.archivedAt ? { archivedAt: matter.archivedAt } : {}),
+      id: matter.id, name: matter.name, goal: matter.goal,
+      ...(workspace !== undefined ? { workspace: { id: matter.workspaceId!, title: workspace } } : {}),
+      sources: matter.sources.map(item => ({ ...item })), ...(matter.instructions ? { instructions: matter.instructions } : {}),
+      createdAt: matter.createdAt, ...(matter.archivedAt ? { archivedAt: matter.archivedAt } : {}),
       sessions, lastActivity: sessions[0]?.lastActivity ?? Date.parse(matter.createdAt),
     };
   });
@@ -104,5 +110,12 @@ export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
   const review = [...days.values()].sort((a, b) => a.daysAgo - b.daysAgo);
   for (const day of review) day.sessions.sort(newestFirst);
 
-  return { matters: [...active, ...archived], unassigned, review, assistant, now: input.now };
+  const recent = input.sessions.filter(view => listed(view) && workspaces.workspaceOf.has(view.id))
+    .sort((a, b) => b.lastActivity - a.lastActivity || a.id.localeCompare(b.id))[0];
+  return {
+    matters: [...active, ...archived], unassigned, review, assistant,
+    workspaces: workspaces.list.map(workspace => ({ ...workspace })),
+    ...(recent ? { recentWorkspaceId: workspaces.workspaceOf.get(recent.id)!.id } : {}),
+    now: input.now,
+  };
 }

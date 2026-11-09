@@ -81,3 +81,26 @@ test('parseRequest takes the my dsh actions: its session, 做事记录, undo and
   rejects({ action: 'undo', id: 'a 1' }, /id 不是有效的 id/);
   rejects({ action: 'assistant', sessionId: 's-1' }, /assistant 不接受这些字段：sessionId/);
 });
+
+test('createMatter may carry a context; setContext replaces one; checkPath takes a path', () => {
+  const sources = [
+    { kind: 'folder', value: '/work/kb', title: 'kb' },
+    { kind: 'link', value: 'https://example.com/' },
+    { kind: 'upload', attachmentId: 'att-1', name: 'plan.md', bytes: 120 },
+  ];
+  assert.deepEqual(parseRequest({ action: 'createMatter', name: '看板', goal: '', workspaceId: 'w-1', sources, instructions: ' 图用真实样式 ' }),
+    { action: 'createMatter', name: '看板', goal: '', workspaceId: 'w-1', sources, instructions: '图用真实样式' });
+  assert.deepEqual(parseRequest({ action: 'createMatter', name: '看板', goal: '', workspaceId: null, sources: [], instructions: '' }),
+    { action: 'createMatter', name: '看板', goal: '', workspaceId: null, sources: [] });
+  assert.deepEqual(parseRequest({ action: 'setContext', id: 'm-1', workspaceId: null, sources: [], instructions: '' }),
+    { action: 'setContext', id: 'm-1', workspaceId: null, sources: [] });
+  assert.deepEqual(parseRequest({ action: 'checkPath', path: ' /work/kb ' }), { action: 'checkPath', path: '/work/kb' });
+  rejects({ action: 'setContext', id: 'm-1', workspaceId: null, sources: [] }, /setContext 缺少字段：instructions/);
+  rejects({ action: 'setContext', id: 'm-1', workspaceId: null, sources: {}, instructions: '' }, /sources 必须是列表/);
+  rejects({ action: 'setContext', id: 'm-1', workspaceId: null, sources: [{ kind: 'video', value: 'x' }], instructions: '' }, /来源的种类不对/);
+  rejects({ action: 'setContext', id: 'm-1', workspaceId: null, sources: [{ kind: 'upload', attachmentId: 'a', name: 'x' }], instructions: '' }, /上传的文件不完整/);
+  rejects({ action: 'setContext', id: 'm-1', workspaceId: null, sources: Array.from({ length: 31 }, (_, n) => ({ kind: 'link', value: `https://e.com/${n}` })), instructions: '' }, /来源最多 30 个/);
+  rejects({ action: 'setContext', id: 'm-1', workspaceId: null, sources: [], instructions: '长'.repeat(2_001) }, /指令最多 2000 个字/);
+  rejects({ action: 'checkPath', path: 'relative/dir' }, /要写完整路径/);
+  rejects({ action: 'checkPath', path: '' }, /要写完整路径/);
+});

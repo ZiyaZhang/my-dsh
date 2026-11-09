@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client';
 import type {} from '@deepseek-ai/dsh-client-connection/client';
+import type { FileUploadService } from '@deepseek-ai/dsh-client-file-upload/client';
 import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
 import { IconCloseOutlineRegular, IconGoalOutlineRegular, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
@@ -9,11 +10,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SessionId } from '@deepseek-ai/dsh-session';
-import { MY_DSH_REMOTE, type MyDshRequest, type MyDshResult } from '../host/remote.js';
+import { MY_DSH_REMOTE, type MyDshRequest, type MyDshResult, type UploadSource } from '../host/remote.js';
 import { openAssistant } from './assistant.js';
 import { BoardPage } from './BoardPage.js';
 import { BoardSource } from './board-source.js';
 import { CardTail, type CardActions } from './Cards.js';
+import type { ContextTools } from './ContextFields.js';
 import { Dialogs } from './dialogs.js';
 import { DockConversation, type OpenDock } from './Dock.js';
 import { MatterDialogs } from './MatterDialog.js';
@@ -83,8 +85,25 @@ export async function apply(ctx: Context): Promise<void> {
     ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
       name: 'sidebar.panellist', id: PANEL, order: 0, label: () => '看板',
     }, ({ size }: { size?: number }) => <BoardIcon size={size ?? 18} />));
+    const tools: ContextTools = {
+      checkPath: path => call({ action: 'checkPath', path }),
+      // The chooser DSH's own add-folder flow opens: the desktop bridge, else the Host's OS chooser.
+      pickFolder: () => {
+        const desktop = (globalThis as { __DSH_DIRECTORY_PICKER__?: { pick(): Promise<string | null> } }).__DSH_DIRECTORY_PICKER__;
+        return desktop ? desktop.pick() : ctx.uiWorkspace.pickDirectory();
+      },
+      // DSH's composer upload: the file goes into DSH's attachment store under my dsh's session, and the Host copies it into the matter's folder on save.
+      upload: async (file: File): Promise<UploadSource> => {
+        const service = (ctx as unknown as { get(name: string): FileUploadService | undefined }).get('fileUpload');
+        if (!service) throw new Error('这里不能上传文件');
+        const { sessionId } = await call({ action: 'assistant' });
+        const result = await service.upload(sessionId as SessionId, file, file.name);
+        if (!result.ok) throw new Error(result.error.message);
+        return { kind: 'upload', attachmentId: result.value.file.attachmentId, name: result.value.file.name, bytes: result.value.file.bytes };
+      },
+    };
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-      name: 'shell.overlay', id: 'my-dsh.dialogs', inject: () => ({ dialogs, call, after }),
+      name: 'shell.overlay', id: 'my-dsh.dialogs', inject: () => ({ dialogs, call, after, source, tools }),
     }, MatterDialogs));
     ctx.inject(['contextMenus'], (ctx) => { registerSessionMenu(ctx, call, dialogs, after); });
   });

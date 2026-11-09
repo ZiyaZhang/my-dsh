@@ -36,7 +36,11 @@ function input(overrides: Partial<SnapshotInput> = {}): SnapshotInput {
   ];
   return {
     matters, sessions, now: NOW, timeZone: 'Asia/Shanghai', assistant: { sessionId: 's-mydsh', cards: [] },
-    workspaces: { workspaceOf: new Map([['s-sort', 'weekly-brief'], ['s-ask', 'release-notes']]), archived: new Set(['s-hidden']) },
+    workspaces: {
+      workspaceOf: new Map([['s-sort', { id: 'w-brief', title: 'weekly-brief' }], ['s-ask', { id: 'w-notes', title: 'release-notes' }]]),
+      archived: new Set(['s-hidden']),
+      list: [{ id: 'w-brief', title: 'weekly-brief', path: '/work/weekly-brief' }, { id: 'w-notes', title: 'release-notes', path: '/work/release-notes' }],
+    },
     ...overrides,
   };
 }
@@ -45,12 +49,12 @@ test('a matter lists the sessions it knows, newest activity first, as the board 
   const { matters } = buildSnapshot(input());
   const brief = matters.find(matter => matter.id === 'm-brief')!;
   assert.deepEqual(brief.sessions, [
-    { id: 's-sort', title: '整理周报', state: 'running', lastActivity: at('2026-11-09T05:30:00Z'), workspace: 'weekly-brief' },
+    { id: 's-sort', title: '整理周报', state: 'running', lastActivity: at('2026-11-09T05:30:00Z'), workspace: 'weekly-brief', workspaceId: 'w-brief' },
     { id: 's-old', title: '第一期发布', state: 'idle', lastActivity: at('2026-10-20T02:00:00Z') },
   ]);
   assert.equal(brief.lastActivity, at('2026-11-09T05:30:00Z'));
   const notes = matters.find(matter => matter.id === 'm-notes')!;
-  assert.deepEqual(notes.sessions[0], { id: 's-ask', title: '核对版本号', state: 'waiting', wait: 'approval', lastActivity: at('2026-11-09T04:00:00Z'), workspace: 'release-notes' });
+  assert.deepEqual(notes.sessions[0], { id: 's-ask', title: '核对版本号', state: 'waiting', wait: 'approval', lastActivity: at('2026-11-09T04:00:00Z'), workspace: 'release-notes', workspaceId: 'w-notes' });
   assert.equal(matters.find(matter => matter.id === 'm-empty')!.lastActivity, at('2026-11-09T05:00:00Z'));
 });
 
@@ -103,6 +107,23 @@ test('the snapshot carries the time it was taken, and my dsh with its cards', ()
   const snapshot = buildSnapshot(input());
   assert.equal(snapshot.now, NOW);
   assert.deepEqual(snapshot.assistant, { sessionId: 's-mydsh', cards: [] });
+});
+
+test('matters carry their main workspace while it exists, their sources and instructions; the snapshot lists workspaces and the recent one', () => {
+  const matters: Matter[] = [
+    { id: 'm-1', name: '发布说明', goal: '', sessions: [], aliases: [], createdAt: '2026-11-01T00:00:00Z', workspaceId: 'w-notes',
+      sources: [{ kind: 'pr', value: 'https://github.com/o/r/pull/1', title: 'o/r#1' }], instructions: '周五前发' },
+    { id: 'm-2', name: '看板', goal: '', sessions: [], aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z', workspaceId: 'w-gone' },
+  ];
+  const snapshot = buildSnapshot(input({ matters }));
+  const first = snapshot.matters.find(matter => matter.id === 'm-1')!;
+  assert.deepEqual(first.workspace, { id: 'w-notes', title: 'release-notes' });
+  assert.deepEqual(first.sources, [{ kind: 'pr', value: 'https://github.com/o/r/pull/1', title: 'o/r#1' }]);
+  assert.equal(first.instructions, '周五前发');
+  assert.equal(snapshot.matters.find(matter => matter.id === 'm-2')!.workspace, undefined);
+  assert.deepEqual(snapshot.workspaces.map(workspace => workspace.id), ['w-brief', 'w-notes']);
+  // s-sort (05:30) is the newest listed session in a workspace; s-ahead and s-free have none.
+  assert.equal(snapshot.recentWorkspaceId, 'w-brief');
 });
 
 test('my dsh never shows on the board, even put in a matter', () => {
