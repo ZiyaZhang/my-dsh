@@ -1,0 +1,5 @@
+# Installing this package as a bundle adds one loader row: the plugin itself. The host and client halves ship in this
+# package, so the row name, the package name and the client bundle's registration id are the same string.
+- insert:
+    - id: my-dsh
+      name: dsh-my-dsh
