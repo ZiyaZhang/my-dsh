@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  SessionIndex, emptyTrack, lastActivity, sessionState, trackEvent, trackRemoved, trackRow, trackStatus,
+  SessionIndex, emptyTrack, lastActivity, lastReply, previewOf, sessionState, sessionView, trackEvent, trackRemoved, trackRow, trackStatus,
   type SessionEventLike, type SessionRow, type SessionTrack,
 } from '../src/host/sessions.ts';
 
@@ -110,8 +110,11 @@ test('a list row read while events arrived does not undo what the events said', 
 test('events that the board does not read return the same track', () => {
   const track = cold();
   assert.equal(trackEvent(track, event('assistant/message', 2_000, { turn: 1, step: 1 })), track);
-  assert.equal(trackEvent(track, event('tool/call', 2_000, { turn: 1, step: 1, callId: 'c-0', name: 'bash', arguments: '' })), track);
+  assert.equal(trackEvent(track, event('assistant/message', 2_000, { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'reasoning', text: '想一想' }] } })), track);
+  assert.equal(trackEvent(track, event('tool/call', 2_000, { turn: 1, step: 1, name: 'bash', arguments: '' })), track);
+  assert.equal(trackEvent(track, event('tool/result', 2_000, { turn: 1, step: 1, message: { role: 'tool', toolCallId: 'c-9', content: [] } })), track);
   assert.equal(trackEvent(track, event('approval/asked', 2_000, { toolName: 'bash' })), track);
+  assert.equal(trackEvent(track, event('request/header', 2_000, {})), track);
 });
 
 test('the index reports a change only when what the board shows changes', () => {
@@ -148,4 +151,109 @@ test('the index keeps events that arrive before the list and merges the row late
   assert.equal(index.view('s-1')?.title, '整理周报');
   index.added(row({ sessionId: 's-3', title: '看板' }));
   assert.equal(index.view('s-3')?.title, '看板');
+});
+
+// ── the preview line's parts ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+const call = (time: number, callId: string, name: string, args: unknown) =>
+  event('tool/call', time, { turn: 1, step: 1, callId, name, arguments: JSON.stringify(args) });
+const result = (time: number, callId: string) => event('tool/result', time, { turn: 1, step: 1, message: { role: 'tool', toolCallId: callId, content: [] } });
+const said = (time: number, ...texts: string[]) =>
+  event('assistant/message', time, { turn: 1, step: 1, message: { role: 'assistant', content: texts.map(text => ({ type: 'text', text })) } });
+const ended = (time: number, reason: unknown = { kind: 'completed' }) => event('turn/end', time, { turn: 1, reason });
+const live = () => fold(trackStatus(cold(), true), event('turn/start', 2_000, { turn: 1 }));
+
+test('a running session shows the model\'s step until a tool runs, then the newest tool call in flight', () => {
+  const started = live();
+  assert.deepEqual(previewOf(started), { kind: 'running', step: '分析请求', since: 2_000 });
+  const stepped = fold(started, event('step/start', 2_100, { turn: 1, step: 1 }));
+  assert.deepEqual(previewOf(stepped), { kind: 'running', step: '分析请求', since: 2_100 });
+  const reading = fold(stepped, call(2_200, 'c-1', 'read', { path: '/work/notes.md' }));
+  assert.deepEqual(previewOf(reading), { kind: 'running', step: '读取文件 /work/notes.md', since: 2_200 });
+  const both = fold(reading, call(2_300, 'c-2', 'bash', { command: 'npm test' }));
+  assert.deepEqual(previewOf(both), { kind: 'running', step: '运行命令 npm test', since: 2_300 });
+  // The newer call returns first: the older one is still in flight.
+  assert.deepEqual(previewOf(fold(both, result(2_400, 'c-2'))), { kind: 'running', step: '读取文件 /work/notes.md', since: 2_200 });
+  // Every call returned: the model has the step again, from the last result.
+  assert.deepEqual(previewOf(fold(both, result(2_400, 'c-2'), result(2_500, 'c-1'))), { kind: 'running', step: '分析请求', since: 2_500 });
+  // A running row with no event of the turn seen yet.
+  assert.deepEqual(previewOf(cold({ running: true })), { kind: 'running' });
+});
+
+test('a waiting session shows its question, even while its agent runs, and a question before an approval', () => {
+  const asked = fold(live(), call(2_100, 'c-1', 'ask_user_question', { questions: [{ id: 'q', question: '先改注释还是先改代码？' }] }));
+  assert.deepEqual(previewOf(asked), { kind: 'question', text: '先改注释还是先改代码？', since: 2_100 });
+  const approval = fold(live(), event('approval/asked', 2_100, { id: 'a-1', toolName: 'bash', callId: 'c-9' }));
+  assert.deepEqual(previewOf(approval), { kind: 'approval', tool: 'bash', since: 2_100 });
+  const both = fold(approval, call(2_200, 'c-1', 'ask_user_question', { questions: [{ id: 'q', question: '要不要重跑？' }] }));
+  assert.deepEqual(sessionState(both), { state: 'waiting', wait: 'question' });
+  assert.deepEqual(previewOf(both), { kind: 'question', text: '要不要重跑？', since: 2_200 });
+  assert.deepEqual(previewOf(fold(both, result(2_300, 'c-1'))), { kind: 'approval', tool: 'bash', since: 2_100 });
+});
+
+test('a failed session shows the error that ended its turn', () => {
+  const failed = trackStatus(fold(live(), ended(3_000, { kind: 'error', error: { message: '  Windows 构建没过：\n内存超了 ', code: 'UNKNOWN' } })), false);
+  assert.deepEqual(previewOf(failed), { kind: 'failed', error: 'Windows 构建没过： 内存超了' });
+  assert.deepEqual(previewOf(trackStatus(fold(live(), ended(3_000, { kind: 'error' })), false)), { kind: 'failed', error: '' });
+});
+
+test('an idle session shows how its last reply starts; a turn that said nothing keeps the reply before it', () => {
+  const replied = trackStatus(fold(live(), said(2_500, '先看了 CI。'), said(2_800, '两处都删短了，', '跑了 doc-sync。'), ended(3_000)), false);
+  assert.deepEqual(previewOf(replied), { kind: 'reply', text: '两处都删短了， 跑了 doc-sync。' });
+  const quiet = trackStatus(fold(replied, event('turn/start', 4_000, { turn: 2 }), ended(4_500, { kind: 'aborted', reason: { kind: 'user' } })), false);
+  assert.deepEqual(previewOf(quiet), { kind: 'reply', text: '两处都删短了， 跑了 doc-sync。' });
+  // While a turn runs, its text is not the last reply yet.
+  const next = fold(replied, event('turn/start', 5_000, { turn: 3 }), said(5_100, '新的回复'));
+  assert.equal(next.reply, '两处都删短了， 跑了 doc-sync。');
+  assert.equal(previewOf(cold()), undefined);
+});
+
+test('the last reply of a cold session is the newest turn outline entry with a response', () => {
+  const outline = [
+    { turn: 1, seq: 3, prompt: '看下 CI', response: '先看了 CI。' },
+    { turn: 2, seq: 40, prompt: '改吧', response: '两处都删短了。' },
+    { turn: 3, seq: 90, prompt: '停', response: '' },
+  ];
+  assert.equal(lastReply(outline), '两处都删短了。');
+  assert.equal(lastReply([]), undefined);
+  assert.equal(lastReply(undefined), undefined);
+  assert.equal(lastReply([{ turn: 1, response: 7 }, 'x', null]), undefined);
+});
+
+test('replies read at listing time fill in sessions, but not over a reply this process saw', () => {
+  let changes = 0;
+  const index = new SessionIndex(() => { changes += 1; });
+  index.load([row(), row({ sessionId: 's-2', title: '发布说明' }), row({ sessionId: 's-3', title: '看板' })]);
+  index.event('s-2', event('turn/start', 2_000, { turn: 1 }));
+  index.event('s-2', said(2_500, '这一轮的回复'));
+  index.event('s-2', ended(3_000));
+  index.status('s-2', false);
+  const before = changes;
+  index.loadReplies(new Map([['s-1', '旧的回复'], ['s-2', '更旧的回复'], ['s-9', '没有这条会话']]));
+  assert.equal(changes, before + 1);
+  assert.deepEqual(index.view('s-1')?.preview, { kind: 'reply', text: '旧的回复' });
+  assert.deepEqual(index.view('s-2')?.preview, { kind: 'reply', text: '这一轮的回复' });
+  assert.equal(index.view('s-3')?.preview, undefined);
+  assert.equal(index.has('s-9'), false);
+  index.loadReplies(new Map([['s-1', '旧的回复']]));
+  assert.equal(changes, before + 1);
+});
+
+test('a change that only moves a running step is minor; everything else is not', () => {
+  const kinds: boolean[] = [];
+  const index = new SessionIndex((minor) => { kinds.push(minor); });
+  index.load([row()]);
+  index.status('s-1', true);
+  index.event('s-1', event('turn/start', 2_000, { turn: 1 }));
+  index.event('s-1', call(2_100, 'c-1', 'bash', { command: 'npm test' }));
+  index.event('s-1', said(2_150, '先跑测试'));
+  index.event('s-1', result(2_200, 'c-1'));
+  index.event('s-1', call(2_300, 'c-2', 'ask_user_question', { questions: [{ id: 'q', question: '要不要重跑？' }] }));
+  assert.deepEqual(kinds, [false, false, false, true, true, false]);
+});
+
+test('the view carries the preview the board shows', () => {
+  const asked = fold(live(), call(2_100, 'c-1', 'ask_user_question', { questions: [{ id: 'q', question: '要不要重跑？' }] }));
+  assert.deepEqual(sessionView(asked).preview, { kind: 'question', text: '要不要重跑？', since: 2_100 });
+  assert.equal('preview' in sessionView(cold()), false);
 });
