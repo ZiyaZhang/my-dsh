@@ -27,12 +27,28 @@ export const THINKING = '分析请求';
 const ARGUMENTS_MAX = 1_000_000;
 
 /**
+ * Markdown marks taken out, so a reply shows as plain words in one line: fences, inline code ticks, bold and italic asterisks,
+ * headings, list and quote markers, and links and images reduced to their text. Underscores stay, since names such as __init__ use them.
+ */
+export function plain(text: string): string {
+  return text
+    .replace(/```[^\n]*\n?/g, ' ')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^[ \t]*#{1,6}[ \t]*/gm, '')
+    .replace(/^[ \t]*>[ \t]?/gm, '')
+    .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, '')
+    .replace(/\*+|`/g, '')
+    .replace(/#{2,}/g, '');
+}
+
+/**
  * Whitespace collapsed to single spaces, trimmed, and cut to `max` characters with an ellipsis. Only the start of a long text is read,
  * so a reply of megabytes costs no more than a short one.
  */
 export function clip(text: string, max = LINE_MAX): string {
   const head = text.length > max * 4 ? text.slice(0, max * 4) : text;
-  const normalized = head.replace(/\s+/g, ' ').trim();
+  const normalized = plain(head).replace(/\s+/g, ' ').trim();
   const characters = [...normalized];
   if (characters.length > max) return `${characters.slice(0, max - 1).join('').trimEnd()}…`;
   return head === text || normalized === '' ? normalized : `${normalized}…`;
