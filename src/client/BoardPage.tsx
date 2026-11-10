@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import {
   Button, HoverCard, HoverCardGroup, IconArchiveOutlineRegular, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, IconPlusOutlineRegular, Menu,
   Tag,
@@ -11,6 +11,7 @@ import { Dock, type DockSlots, type OpenDock } from './Dock.js';
 import type { Dialogs } from './dialogs.js';
 import type { Call } from './index.js';
 import { StateMark, activate, only, useMinuteTick } from './parts.js';
+import { Rail } from './Rail.js';
 import { columnCounts, dayOpen, lineOf } from './rows.js';
 import { clock, dayTitle, when } from './time.js';
 
@@ -24,25 +25,60 @@ export interface BoardPageProps {
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** The board page: the board of matters or one matter's view on top, scrolling; my dsh's conversation docked below. */
+/** Narrower than this, the page folds the right column away and the board and the dock take the width. */
+const RAIL_PAGE_MIN = 1_100;
+
+/** Whether the element is at least `min` pixels wide, kept current as it resizes; the page re-renders only when that flips. */
+function useWideEnough(ref: RefObject<HTMLElement | null>, min: number): boolean {
+  const [wide, setWide] = useState(false);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return undefined;
+    setWide(element.getBoundingClientRect().width >= min);
+    const observer = new ResizeObserver(([entry]) => { if (entry) setWide(entry.contentRect.width >= min); });
+    observer.observe(element);
+    return () => { observer.disconnect(); };
+  }, [ref, min]);
+  return wide;
+}
+
+/**
+ * The page: the board of matters or one matter's view on top, scrolling, with my dsh's conversation docked below; the right column of
+ * 等你处理 and 跟进事项 runs the full height beside both while the page is wide enough.
+ */
 export function BoardPage({ source, call, dialogs, openSession, openDock, renderSlot, SessionProvider }: BoardPageProps & DockSlots) {
   const [activity, setActivity] = useState(false);
+  const [matterId, setMatterId] = useState<string | null>(null);
+  const page = useRef<HTMLElement>(null);
+  const board = useRef<HTMLDivElement>(null);
+  const wide = useWideEnough(page, RAIL_PAGE_MIN);
+  // A matter opened from the right column or a card starts at its top, not where the board was scrolled to.
+  useEffect(() => { board.current?.scrollTo({ top: 0 }); }, [matterId]);
   return (
-    <main className="mydsh-page">
-      <div className="mydsh-board">
-        <div className="mydsh-column"><BoardContent source={source} call={call} dialogs={dialogs} openSession={openSession} /></div>
+    <main className="mydsh-page" ref={page}>
+      <div className="mydsh-main">
+        <div className="mydsh-board" ref={board}>
+          <div className="mydsh-column">
+            <BoardContent source={source} call={call} dialogs={dialogs} openSession={openSession} matterId={matterId} openMatter={setMatterId} />
+          </div>
+        </div>
+        <Dock openDock={openDock} renderSlot={renderSlot} SessionProvider={SessionProvider} openSession={openSession} showActivity={() => { setActivity(true); }} />
       </div>
-      <Dock openDock={openDock} renderSlot={renderSlot} SessionProvider={SessionProvider} openSession={openSession} showActivity={() => { setActivity(true); }} />
+      {wide && <Rail source={source} openSession={openSession} openMatter={setMatterId} />}
       {activity && <ActivityDialog close={() => { setActivity(false); }} call={call} source={source} />}
     </main>
   );
 }
 
-function BoardContent({ source, call, dialogs, openSession }: Omit<BoardPageProps, 'openDock'>) {
+function BoardContent({ source, call, dialogs, openSession, matterId, openMatter }: Omit<BoardPageProps, 'openDock'> & {
+  matterId: string | null;
+  openMatter: (matterId: string | null) => void;
+}) {
   const state = useSyncExternalStore(source.subscribe, source.getSnapshot);
-  const [matterId, setMatterId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   useMinuteTick();
+  // A failure belongs to the view it happened in.
+  useEffect(() => { setFailure(null); }, [matterId]);
 
   const act = (run: () => Promise<unknown>) => {
     setFailure(null);
@@ -66,7 +102,7 @@ function BoardContent({ source, call, dialogs, openSession }: Omit<BoardPageProp
         matter={matter}
         now={Date.now()}
         notice={notice}
-        back={() => { setMatterId(null); setFailure(null); }}
+        back={() => { openMatter(null); }}
         openSession={openSession}
         rename={() => { dialogs.open({ kind: 'rename', matterId: matter.id, name: matter.name }); }}
         editGoal={() => { dialogs.open({ kind: 'goal', matterId: matter.id, goal: matter.goal }); }}
@@ -82,7 +118,7 @@ function BoardContent({ source, call, dialogs, openSession }: Omit<BoardPageProp
       now={Date.now()}
       notice={notice}
       openSession={openSession}
-      openMatter={(id) => { setMatterId(id); setFailure(null); }}
+      openMatter={openMatter}
       create={() => { dialogs.open({ kind: 'create' }); }}
     />
   );
