@@ -36,6 +36,9 @@ test('the line is one line, cut with an ellipsis at the reply preview bound', ()
   assert.equal([...clip(long)].length, 120);
   assert.equal(clip('短'.repeat(120)), '短'.repeat(120));
   assert.equal(clip('ab cd', 4), 'ab…');
+  // Only the start of a long text is read.
+  assert.equal(clip('x'.repeat(100_000)), `${'x'.repeat(119)}…`);
+  assert.equal(clip(`开头${' '.repeat(10_000)}结尾`), '开头…');
 });
 
 test('a tool call reads as DSH\'s own chat names it: the verb, then what it works on', () => {

@@ -9,7 +9,7 @@
  *
  * The track functions are pure and return the same object when an input changes nothing the board reads.
  */
-import { THINKING, clip, questionText, toolStep, type Preview } from './preview.js';
+import { LINE_MAX, THINKING, clip, questionText, toolStep, type Preview } from './preview.js';
 import type { SessionState, WaitKind } from './remote.js';
 
 /** A session list row, cut down to what the board reads. `title` is undefined when the row's projection block leaves it out. */
@@ -122,10 +122,16 @@ const textField = (data: unknown, key: string): string | undefined => {
   return typeof value === 'string' ? value : undefined;
 };
 
-/** The visible text of an assistant message: its text blocks joined with spaces, as DSH's turn outline joins them. */
+/** The start of an assistant message's visible text: its text blocks joined with spaces, as DSH's turn outline joins them. */
 function messageText(message: unknown): string {
   const content = isRecord(message) && Array.isArray(message.content) ? message.content : [];
-  return content.flatMap(block => isRecord(block) && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join(' ');
+  let text = '';
+  for (const block of content) {
+    if (!isRecord(block) || block.type !== 'text' || typeof block.text !== 'string') continue;
+    text = text ? `${text} ${block.text}` : block.text;
+    if (text.length > LINE_MAX * 4) break;
+  }
+  return text;
 }
 
 /**

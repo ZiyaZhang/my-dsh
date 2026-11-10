@@ -26,11 +26,16 @@ export const THINKING = '分析请求';
 /** Arguments longer than this are not read for a detail; the verb and the tool name stand in. */
 const ARGUMENTS_MAX = 1_000_000;
 
-/** Whitespace collapsed to single spaces, trimmed, and cut to `max` characters with an ellipsis. */
+/**
+ * Whitespace collapsed to single spaces, trimmed, and cut to `max` characters with an ellipsis. Only the start of a long text is read,
+ * so a reply of megabytes costs no more than a short one.
+ */
 export function clip(text: string, max = LINE_MAX): string {
-  const normalized = text.replace(/\s+/g, ' ').trim();
+  const head = text.length > max * 4 ? text.slice(0, max * 4) : text;
+  const normalized = head.replace(/\s+/g, ' ').trim();
   const characters = [...normalized];
-  return characters.length > max ? `${characters.slice(0, max - 1).join('').trimEnd()}…` : normalized;
+  if (characters.length > max) return `${characters.slice(0, max - 1).join('').trimEnd()}…`;
+  return head === text || normalized === '' ? normalized : `${normalized}…`;
 }
 
 /** The verb DSH's chat shows for a running tool, without 正在 (ui-chat `stepProcess`, by the same tool-name rules). */
