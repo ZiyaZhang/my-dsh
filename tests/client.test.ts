@@ -25,7 +25,7 @@ test('review days are today and yesterday with their dates, then plain dates', (
   assert.deepEqual(dayTitle({ day: '2025-12-31', daysAgo: 13 }, at('2026-01-05T10:00:00+08:00')), { label: '2025年12月31日' });
 });
 
-const snapshot = (now: number): BoardSnapshot => ({ matters: [], unassigned: [], review: [], assistant: { sessionId: null, cards: [] }, workspaces: [], now });
+const snapshot = (now: number): BoardSnapshot => ({ matters: [], unassigned: [], review: [], attention: [], assistant: { sessionId: null, cards: [] }, workspaces: [], now });
 
 /** A notice stream the test feeds by hand. */
 class FakeStream implements AsyncIterable<unknown> {

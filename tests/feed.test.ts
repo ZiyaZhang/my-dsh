@@ -97,3 +97,22 @@ test('closing the feed ends every stream and drops the pending notice', async ()
   assert.deepEqual((await late.next()).value, { revision: 0 });
   assert.equal((await late.next()).done, true);
 });
+
+test('a minor change waits longer; a change that matters while it waits brings the notice forward', async () => {
+  const scheduler = new ManualScheduler();
+  const feed = new ChangeFeed(300, scheduler, 1_000);
+  const stream = feed.follow(new AbortController().signal);
+  await stream.next();
+  feed.touch(true); feed.touch(true);
+  assert.deepEqual(scheduler.pending.map(entry => entry.ms), [1_000]);
+  feed.touch();
+  assert.deepEqual(scheduler.pending.map(entry => entry.ms), [300]);
+  // A minor change rides along with the notice already coming.
+  feed.touch(true);
+  assert.deepEqual(scheduler.pending.map(entry => entry.ms), [300]);
+  const next = stream.next();
+  scheduler.fire();
+  assert.deepEqual((await next).value, { revision: 1 });
+  assert.equal(scheduler.pending.length, 0);
+  await stream.return(undefined);
+});

@@ -132,3 +132,34 @@ test('my dsh never shows on the board, even put in a matter', () => {
   assert.deepEqual(snapshot.matters[0]!.sessions, []);
   assert.ok(!snapshot.review.some(day => day.sessions.some(session => session.id === 's-mydsh')));
 });
+
+test('sessions on the board carry their preview; the unassigned list, which the page does not show, leaves it out', () => {
+  const sessions = input().sessions.map((item): SessionView => {
+    if (item.id === 's-sort') return { ...item, preview: { kind: 'running', step: '运行命令 npm test', since: at('2026-11-09T05:40:00Z') } };
+    if (item.id === 's-free') return { ...item, preview: { kind: 'reply', text: '整理完了' } };
+    return item;
+  });
+  const snapshot = buildSnapshot(input({ sessions }));
+  const brief = snapshot.matters.find(matter => matter.id === 'm-brief')!;
+  assert.deepEqual(brief.sessions[0]!.preview, { kind: 'running', step: '运行命令 npm test', since: at('2026-11-09T05:40:00Z') });
+  assert.equal(brief.sessions[1]!.preview, undefined);
+  const today = snapshot.review[0]!.sessions;
+  assert.deepEqual(today.find(session => session.id === 's-free')!.preview, { kind: 'reply', text: '整理完了' });
+  assert.ok(snapshot.unassigned.every(session => session.preview === undefined));
+});
+
+test('等你处理 lists the sessions that wait or failed, the longest wait first, with their matter', () => {
+  const sessions = input().sessions.map((item): SessionView => {
+    if (item.id === 's-ask') return { ...item, preview: { kind: 'approval', tool: 'bash', since: at('2026-11-09T04:30:00Z') } };
+    if (item.id === 's-done') return { ...item, preview: { kind: 'failed', error: '构建没过' } };
+    if (item.id === 's-free') return { ...item, state: 'waiting', wait: 'question', preview: { kind: 'question', text: '要不要重跑？', since: at('2026-11-09T05:55:00Z') } };
+    // DSH hides these, and my dsh is never on the board.
+    if (item.id === 's-hidden' || item.id === 's-child' || item.id === 's-mydsh') return { ...item, state: 'waiting', wait: 'question' };
+    return item;
+  });
+  const { attention } = buildSnapshot(input({ sessions }));
+  assert.deepEqual(attention.map(session => [session.id, session.state, session.matter?.name]), [
+    ['s-done', 'failed', '第二期'], ['s-ask', 'waiting', '发布说明'], ['s-free', 'waiting', undefined],
+  ]);
+  assert.deepEqual(attention[1]!.preview, { kind: 'approval', tool: 'bash', since: at('2026-11-09T04:30:00Z') });
+});

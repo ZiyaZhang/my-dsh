@@ -1,6 +1,7 @@
 /**
  * Change notices for the `watch` stream. The first change schedules one notice after the delay and later changes ride along with it, so a
- * busy session costs at most one notice per delay. A reader that falls behind gets only the latest revision.
+ * busy session costs at most one notice per delay. A minor change (a running session's step moved) waits a longer delay; a change that
+ * matters while it waits brings the notice forward. A reader that falls behind gets only the latest revision.
  */
 import type { WatchNotice } from './remote.js';
 
@@ -18,20 +19,24 @@ export const timerScheduler: Scheduler = {
 
 export class ChangeFeed {
   private revision = 0;
-  private cancel: (() => void) | undefined;
+  /** The notice on its way, and whether only minor changes asked for it. */
+  private pending: { cancel: () => void; minor: boolean } | undefined;
   private closed = false;
   private readonly wakers = new Set<() => void>();
 
-  constructor(private readonly delayMs = 300, private readonly scheduler: Scheduler = timerScheduler) {}
+  constructor(private readonly delayMs = 300, private readonly scheduler: Scheduler = timerScheduler, private readonly minorDelayMs = 1_000) {}
 
-  /** Something the board shows changed. */
-  touch(): void {
-    if (this.closed || this.cancel) return;
-    this.cancel = this.scheduler.schedule(() => {
-      this.cancel = undefined;
+  /** Something the board shows changed; `minor` when it can wait the longer delay. */
+  touch(minor = false): void {
+    if (this.closed) return;
+    if (this.pending && (minor || !this.pending.minor)) return;
+    this.pending?.cancel();
+    const cancel = this.scheduler.schedule(() => {
+      this.pending = undefined;
       this.revision += 1;
       this.wake();
-    }, this.delayMs);
+    }, minor ? this.minorDelayMs : this.delayMs);
+    this.pending = { cancel, minor };
   }
 
   /** The current revision first, then each later one, until `signal` aborts or the feed closes. */
@@ -51,8 +56,8 @@ export class ChangeFeed {
   /** End every stream; later changes are ignored. */
   close(): void {
     this.closed = true;
-    this.cancel?.();
-    this.cancel = undefined;
+    this.pending?.cancel();
+    this.pending = undefined;
     this.wake();
   }
 

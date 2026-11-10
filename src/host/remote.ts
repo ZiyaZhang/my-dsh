@@ -3,6 +3,9 @@
  * bundle imports this file, so it keeps to types and the dependency-free check below.
  */
 import type { InvocationDescriptor, RemoteResult, RemoteStreamHandle, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol';
+import type { Preview } from './preview.js';
+
+export type { Preview } from './preview.js';
 
 /**
  * How a session came into a matter: `manual` the user put it there, `mydsh` my dsh started it there, `origin` filed by where it came from
@@ -81,6 +84,8 @@ export interface BoardSession {
   workspaceId?: string;
   /** Archived in DSH, so hidden from the sidebar. */
   archived?: true;
+  /** What the line under its title is about; absent when nothing is known, and on the unassigned list, which the page does not show. */
+  preview?: Preview;
 }
 
 export interface BoardMatter {
@@ -121,6 +126,8 @@ export interface BoardSnapshot {
   unassigned: BoardSession[];
   /** The last 14 local days that had activity, today first. */
   review: ReviewDay[];
+  /** Sessions that wait for the user or whose last turn failed, the longest wait first, for 等你处理. */
+  attention: ReviewSession[];
   /** my dsh's session and the cards under its turns. */
   assistant: AssistantView;
   /** DSH's workspaces, for picking a matter's main workspace. */

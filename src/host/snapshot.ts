@@ -1,6 +1,7 @@
 /**
- * The board snapshot: matters with their sessions, the sessions in no matter, and the review by local day. Pure, so the day boundaries and
- * the orderings can be tested with a fixed clock and time zone.
+ * The board snapshot: matters with their sessions, the sessions in no matter, the review by local day, and the sessions that need the
+ * user. Sessions the page shows carry the parts of their preview line. Pure, so the day boundaries and the orderings can be tested with a
+ * fixed clock and time zone.
  */
 import type { AssistantView, BoardMatter, BoardSession, BoardSnapshot, Matter, ReviewDay, ReviewSession } from './remote.js';
 import type { SessionView } from './sessions.js';
@@ -56,6 +57,12 @@ export function displayTitle(view: SessionView): string {
 const newestFirst = (a: { lastActivity: number; id: string }, b: { lastActivity: number; id: string }) =>
   b.lastActivity - a.lastActivity || a.id.localeCompare(b.id);
 
+/** When a session began to need the user: when it asked, else (a failed turn) its last activity. */
+export function waitingSince(session: BoardSession): number {
+  const { preview } = session;
+  return preview && (preview.kind === 'question' || preview.kind === 'approval') ? preview.since : session.lastActivity;
+}
+
 export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
   const { workspaces, assistant } = input;
   const own = (view: SessionView) => view.id === assistant.sessionId;
@@ -63,13 +70,18 @@ export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
   const matterOf = new Map<string, Matter>();
   for (const matter of input.matters) for (const link of matter.sessions) matterOf.set(link.sessionId, matter);
 
-  const board = (view: SessionView): BoardSession => {
+  const board = (view: SessionView, shown = true): BoardSession => {
     const workspace = workspaces.workspaceOf.get(view.id);
     return {
       id: view.id, title: displayTitle(view), state: view.state, ...(view.wait ? { wait: view.wait } : {}),
       lastActivity: view.lastActivity, ...(workspace !== undefined ? { workspace: workspace.title, workspaceId: workspace.id } : {}),
       ...(workspaces.archived.has(view.id) ? { archived: true as const } : {}),
+      ...(shown && view.preview ? { preview: view.preview } : {}),
     };
+  };
+  const reviewed = (view: SessionView): ReviewSession => {
+    const matter = matterOf.get(view.id);
+    return { ...board(view), ...(matter ? { matter: { id: matter.id, name: matter.name } } : {}) };
   };
   const named = new Map(workspaces.list.map(workspace => [workspace.id, workspace.title]));
   /** What the DSH sidebar shows: no subagents, no blank sessions, nothing archived; and never my dsh's own session. */
@@ -90,7 +102,7 @@ export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
   const archived = matters.filter(matter => matter.archivedAt)
     .sort((a, b) => Date.parse(b.archivedAt!) - Date.parse(a.archivedAt!) || a.id.localeCompare(b.id));
 
-  const unassigned = input.sessions.filter(view => listed(view) && !matterOf.has(view.id)).map(board).sort(newestFirst);
+  const unassigned = input.sessions.filter(view => listed(view) && !matterOf.has(view.id)).map(view => board(view, false)).sort(newestFirst);
 
   const today = dayKey(input.now, input.timeZone);
   const days = new Map<string, ReviewDay>();
@@ -101,19 +113,20 @@ export function buildSnapshot(input: SnapshotInput): BoardSnapshot {
     const daysAgo = Math.max(0, daysBetween(day, today));
     if (daysAgo >= REVIEW_DAYS) continue;
     const key = daysAgo === 0 ? today : day;
-    const matter = matterOf.get(view.id);
-    const session: ReviewSession = { ...board(view), ...(matter ? { matter: { id: matter.id, name: matter.name } } : {}) };
     const entry = days.get(key) ?? { day: key, daysAgo, sessions: [] };
-    entry.sessions.push(session);
+    entry.sessions.push(reviewed(view));
     days.set(key, entry);
   }
   const review = [...days.values()].sort((a, b) => a.daysAgo - b.daysAgo);
   for (const day of review) day.sessions.sort(newestFirst);
 
+  const attention = input.sessions.filter(view => listed(view) && (view.state === 'waiting' || view.state === 'failed')).map(reviewed)
+    .sort((a, b) => waitingSince(a) - waitingSince(b) || a.id.localeCompare(b.id));
+
   const recent = input.sessions.filter(view => listed(view) && workspaces.workspaceOf.has(view.id))
     .sort((a, b) => b.lastActivity - a.lastActivity || a.id.localeCompare(b.id))[0];
   return {
-    matters: [...active, ...archived], unassigned, review, assistant,
+    matters: [...active, ...archived], unassigned, review, attention, assistant,
     workspaces: workspaces.list.map(workspace => ({ ...workspace })),
     ...(recent ? { recentWorkspaceId: workspaces.workspaceOf.get(recent.id)!.id } : {}),
     now: input.now,

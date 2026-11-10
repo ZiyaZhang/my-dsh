@@ -14,6 +14,9 @@ import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type { SessionRequestId, SessionSummary } from '@deepseek-ai/dsh-api-session-controller';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import { appendPluginRecord, type Session, type SessionId } from '@deepseek-ai/dsh-session';
+import type {} from '@deepseek-ai/dsh-session-projection-cache';
+import type {} from '@deepseek-ai/dsh-session-query';
+import type {} from '@deepseek-ai/dsh-session-turn-outline';
 import type {} from '@deepseek-ai/dsh-storage-domain';
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace';
@@ -38,7 +41,7 @@ import {
   type ProposalChange, type WatchNotice, type WhichCandidate, type WhichQuestion,
 } from './remote.js';
 import { recentReplies, trackTurn, type TurnState } from './session-text.js';
-import { SessionIndex, sessionView, type SessionRow } from './sessions.js';
+import { SessionIndex, lastReply, sessionView, type SessionRow } from './sessions.js';
 import { buildSnapshot, displayTitle, type WorkspaceFacts } from './snapshot.js';
 import { MatterStore } from './store.js';
 
@@ -96,7 +99,7 @@ function given<T>(value: T | undefined, field: string): T {
 }
 
 export default class MyDsh extends TypertRemoteService {
-  static inject = ['typert', 'sessionController', 'workspaceRegistry'];
+  static inject = ['typert', 'sessionController', 'workspaceRegistry', 'sessionQuery'];
   /** `config.dataDirectory`, else `$DSH_HOME/my-dsh`, else `~/.dsh/my-dsh`. */
   readonly directory: string;
   private readonly store: MatterStore;
@@ -116,6 +119,8 @@ export default class MyDsh extends TypertRemoteService {
   private presetRegistered!: () => void;
   /** The preset registry, held while its injection is live: the service's own context does not inject it, so reading it there throws. */
   private presets: Context['agentPresets'] | undefined;
+  /** DSH's cache of each session's projections, held while its injection is live; a composition may leave it out. */
+  private projectionCache: Context['sessionProjectionCache'] | undefined;
   /** The running check-or-create of my dsh's session. */
   private ensuring: Promise<string> | undefined;
   /** Cards a click is being applied to, so a second click cannot apply it twice. */
@@ -127,7 +132,7 @@ export default class MyDsh extends TypertRemoteService {
     this.store = new MatterStore(this.directory, () => { this.changed(); });
     this.assistant = new AssistantStore(this.directory, () => { this.changed(); });
     this.corrections = new CorrectionLog(this.directory, (error) => { ctx.logger.warn('my-dsh: a correction could not be written: %s', message(error)); });
-    this.sessions = new SessionIndex(() => { this.changed(); });
+    this.sessions = new SessionIndex((minor) => { this.feed.touch(minor); });
     this.preset = new Promise((resolve) => { this.presetRegistered = resolve; });
     // Listen before the first listing, so nothing that happens while it runs is lost.
     ctx.on('api-session/added', (summary) => { this.sessions.added(toRow(summary)); });
@@ -150,6 +155,14 @@ export default class MyDsh extends TypertRemoteService {
         this.presetRegistered();
         return () => { this.presets = undefined; return unregister(); };
       }, 'my-dsh: preset');
+    });
+    ctx.inject(['sessionProjectionCache'], (inner) => {
+      inner.effect(() => {
+        this.projectionCache = inner.sessionProjectionCache;
+        // A listing that ran before the cache was there read no replies.
+        if (this.listing) void this.fillReplies();
+        return () => { this.projectionCache = undefined; };
+      }, 'my-dsh: projection cache');
     });
     this.ready = Promise.all([this.store.open(), this.assistant.open()]).then(() => undefined);
     void this.ready.catch(() => undefined); // reported by [Service.init] and by every call
@@ -657,9 +670,35 @@ export default class MyDsh extends TypertRemoteService {
   private async listSessions(): Promise<void> {
     const { items } = await this.ctx.sessionController.list({}, this.lifetime.signal);
     this.sessions.load(items.map(toRow));
+    await this.fillReplies();
     if (!this.workspacesFilled) {
       this.workspacesFilled = true;
       await this.fillWorkspaces();
+    }
+  }
+
+  /**
+   * How each session's last reply starts, from the turn outline DSH caches per session: one listing of session headers (the read the
+   * session list itself makes), then an in-memory cache lookup per session. No session log is read. Sessions the cache has no current
+   * record for (older log formats) get no reply; turns this process sees end keep the replies current from then on.
+   */
+  private async fillReplies(): Promise<void> {
+    const cache = this.projectionCache;
+    if (!cache) return;
+    try {
+      const records = await this.ctx.sessionQuery.listSessions(this.lifetime.signal);
+      const replies = new Map<string, string>();
+      for (const record of records) {
+        try {
+          const reply = lastReply(cache.cachedSnapshot(record.header, ['turnOutline'])?.values.turnOutline);
+          if (reply) replies.set(record.header.id, reply);
+        } catch {
+          // A record the cache cannot serve gives no reply.
+        }
+      }
+      this.sessions.loadReplies(replies);
+    } catch (error) {
+      if (!this.lifetime.signal.aborted) this.ctx.logger.warn('my-dsh: the last replies were not read: %s', message(error));
     }
   }
 
