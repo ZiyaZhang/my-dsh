@@ -79,7 +79,7 @@ function BoardContent({ source, call, dialogs, openSession }: Omit<BoardPageProp
   if (state.status !== 'ready') {
     return (
       <Page>
-        <header className="mydsh-head"><h1>看板</h1></header>
+        <header className="mydsh-head"><h1>my dsh</h1></header>
         {state.status === 'loading' ? <p className="mydsh-quiet">正在读取</p> : <p className="mydsh-error">读不到看板：{state.error}</p>}
       </Page>
     );
@@ -131,11 +131,11 @@ function BoardView({ snapshot, now, notice, openSession, openMatter, create }: {
   const archived = snapshot.matters.filter(matter => matter.archivedAt);
   return (
     <Page>
-      <header className="mydsh-head"><h1>看板</h1></header>
+      <header className="mydsh-head"><h1>my dsh</h1></header>
       {notice && <p className="mydsh-error">{notice}</p>}
       <section className="mydsh-section">
         <div className="mydsh-section-head">
-          <h2>进行中<span className="mydsh-count">{active.length}</span></h2>
+          <h2>事项<span className="mydsh-count">进行中 {active.length}</span></h2>
           <Button variant="ghost" size="sm" className="mydsh-new" icon={<IconPlusOutlineRegular size={14} />} onClick={create}>新建事项</Button>
         </div>
         {active.length
@@ -276,7 +276,7 @@ function MatterView({ matter, now, notice, back, openSession, rename, editGoal, 
     <Page>
       <header className="mydsh-matter-head">
         <nav className="mydsh-crumbs">
-          <button type="button" className="mydsh-crumb" onClick={back}>看板</button>
+          <button type="button" className="mydsh-crumb" onClick={back}>my dsh</button>
           <span className="mydsh-crumb-sep">/</span>
           <span className="mydsh-crumb is-current">{matter.name}</span>
         </nav>

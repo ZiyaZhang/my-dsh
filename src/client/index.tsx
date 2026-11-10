@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-connection/client';
 import type { FileUploadService } from '@deepseek-ai/dsh-client-file-upload/client';
 import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
-import { IconCloseOutlineRegular, IconGoalOutlineRegular, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconCloseOutlineRegular, IconGoalOutlineRegular, IconPlusOutlineRegular, IconSparkleRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
@@ -83,8 +83,8 @@ export async function apply(ctx: Context): Promise<void> {
       inject: () => ({ source, actions }),
     }, CardTail));
     ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-      name: 'sidebar.panellist', id: PANEL, order: 0, label: () => '看板',
-    }, ({ size }: { size?: number }) => <BoardIcon size={size ?? 18} />));
+      name: 'sidebar.panellist', id: PANEL, order: 0, label: () => 'my dsh',
+    }, ({ size }: { size?: number }) => <IconSparkleRegular size={size ?? 16} />));
     const tools: ContextTools = {
       checkPath: path => call({ action: 'checkPath', path }),
       // The chooser DSH's own add-folder flow opens: the desktop bridge, else the Host's OS chooser.
@@ -150,16 +150,4 @@ function registerSessionMenu(ctx: Context, call: Call, dialogs: Dialogs, after: 
       return actions;
     },
   }), 'my-dsh: session menu');
-}
-
-/** Four squares, the board. */
-function BoardIcon({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden="true">
-      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
-      <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
-      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
-      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
-    </svg>
-  );
 }
