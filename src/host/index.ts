@@ -132,7 +132,8 @@ export default class MyDsh extends TypertRemoteService {
     this.store = new MatterStore(this.directory, () => { this.changed(); });
     this.assistant = new AssistantStore(this.directory, () => { this.changed(); });
     this.corrections = new CorrectionLog(this.directory, (error) => { ctx.logger.warn('my-dsh: a correction could not be written: %s', message(error)); });
-    this.sessions = new SessionIndex((minor) => { this.feed.touch(minor); });
+    // my dsh's own session is not on the board: its turns change nothing the page shows.
+    this.sessions = new SessionIndex((minor, sessionId) => { if (sessionId === undefined || sessionId !== this.assistant.peek().sessionId) this.feed.touch(minor); });
     this.preset = new Promise((resolve) => { this.presetRegistered = resolve; });
     // Listen before the first listing, so nothing that happens while it runs is lost.
     ctx.on('api-session/added', (summary) => { this.sessions.added(toRow(summary)); });

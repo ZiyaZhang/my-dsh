@@ -275,12 +275,12 @@ function viewChange(before: SessionView | undefined, after: SessionView): 'none'
 
 /**
  * Every session this process knows, kept current by the Host's listeners; `changed` runs when what the board shows changes, with
- * `minor` set when only a running step moved.
+ * `minor` set when only a running step moved, and the session when one session changed.
  */
 export class SessionIndex {
   private readonly tracks = new Map<string, SessionTrack>();
 
-  constructor(private readonly changed: (minor: boolean) => void = () => {}) {}
+  constructor(private readonly changed: (minor: boolean, sessionId?: string) => void = () => {}) {}
 
   /** The start-up listing; reports one change for the whole list. */
   load(rows: readonly SessionRow[]): void {
@@ -321,6 +321,6 @@ export class SessionIndex {
     if (after === before) return;
     this.tracks.set(id, after);
     const kind = viewChange(before && sessionView(before), sessionView(after));
-    if (kind !== 'none') this.changed(kind === 'minor');
+    if (kind !== 'none') this.changed(kind === 'minor', id);
   }
 }

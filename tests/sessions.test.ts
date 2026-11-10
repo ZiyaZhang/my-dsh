@@ -241,7 +241,8 @@ test('replies read at listing time fill in sessions, but not over a reply this p
 
 test('a change that only moves a running step is minor; everything else is not', () => {
   const kinds: boolean[] = [];
-  const index = new SessionIndex((minor) => { kinds.push(minor); });
+  const ids = new Set<string | undefined>();
+  const index = new SessionIndex((minor, id) => { kinds.push(minor); ids.add(id); });
   index.load([row()]);
   index.status('s-1', true);
   index.event('s-1', event('turn/start', 2_000, { turn: 1 }));
@@ -250,6 +251,8 @@ test('a change that only moves a running step is minor; everything else is not',
   index.event('s-1', result(2_200, 'c-1'));
   index.event('s-1', call(2_300, 'c-2', 'ask_user_question', { questions: [{ id: 'q', question: '要不要重跑？' }] }));
   assert.deepEqual(kinds, [false, false, false, true, true, false]);
+  // The listing names no session; each event names the session it changed.
+  assert.deepEqual([...ids], [undefined, 's-1']);
 });
 
 test('the view carries the preview the board shows', () => {
