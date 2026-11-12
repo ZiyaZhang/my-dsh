@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import type { Suggestion } from '../src/host/grouping.ts';
 import type { Matter, SessionLink } from '../src/host/remote.ts';
 import type { SessionView } from '../src/host/sessions.ts';
-import { buildSnapshot, dayKey, type SnapshotInput } from '../src/host/snapshot.ts';
+import { buildSnapshot, dayKey, hostingPresets, matterSchedules, type ScheduleEntry, type SnapshotInput } from '../src/host/snapshot.ts';
 
 const at = (iso: string) => Date.parse(iso);
 const NOW = at('2026-11-09T06:00:00Z'); // 14:00 in Shanghai
@@ -35,7 +36,7 @@ function input(overrides: Partial<SnapshotInput> = {}): SnapshotInput {
     view('s-mydsh', '2026-11-09T05:59:30Z', { title: 'my dsh' }),
   ];
   return {
-    matters, sessions, now: NOW, timeZone: 'Asia/Shanghai', assistant: { sessionId: 's-mydsh', cards: [] },
+    matters, sessions, now: NOW, timeZone: 'Asia/Shanghai', assistant: { sessionId: 's-mydsh', cards: [] }, presets: [], replies: new Map(), schedules: [],
     workspaces: {
       workspaceOf: new Map([['s-sort', { id: 'w-brief', title: 'weekly-brief' }], ['s-ask', { id: 'w-notes', title: 'release-notes' }]]),
       archived: new Set(['s-hidden']),
@@ -49,12 +50,15 @@ test('a matter lists the sessions it knows, newest activity first, as the board 
   const { matters } = buildSnapshot(input());
   const brief = matters.find(matter => matter.id === 'm-brief')!;
   assert.deepEqual(brief.sessions, [
-    { id: 's-sort', title: '整理周报', state: 'running', lastActivity: at('2026-11-09T05:30:00Z'), workspace: 'weekly-brief', workspaceId: 'w-brief' },
-    { id: 's-old', title: '第一期发布', state: 'idle', lastActivity: at('2026-10-20T02:00:00Z') },
+    { id: 's-sort', title: '整理周报', state: 'running', lastActivity: at('2026-11-09T05:30:00Z'), workspace: 'weekly-brief', workspaceId: 'w-brief', by: 'manual' },
+    { id: 's-old', title: '第一期发布', state: 'idle', lastActivity: at('2026-10-20T02:00:00Z'), by: 'manual' },
   ]);
   assert.equal(brief.lastActivity, at('2026-11-09T05:30:00Z'));
   const notes = matters.find(matter => matter.id === 'm-notes')!;
-  assert.deepEqual(notes.sessions[0], { id: 's-ask', title: '核对版本号', state: 'waiting', wait: 'approval', lastActivity: at('2026-11-09T04:00:00Z'), workspace: 'release-notes', workspaceId: 'w-notes' });
+  assert.deepEqual(notes.sessions[0], {
+    id: 's-ask', title: '核对版本号', state: 'waiting', wait: 'approval', lastActivity: at('2026-11-09T04:00:00Z'), workspace: 'release-notes', workspaceId: 'w-notes',
+    by: 'manual',
+  });
   assert.equal(matters.find(matter => matter.id === 'm-empty')!.lastActivity, at('2026-11-09T05:00:00Z'));
 });
 
@@ -126,6 +130,103 @@ test('matters carry their main workspace while it exists, their sources and inst
   assert.equal(snapshot.recentWorkspaceId, 'w-brief');
 });
 
+test('a hosted matter carries its preset; a matter\'s sessions say how they joined; the snapshot lists the presets to host under', () => {
+  const matters: Matter[] = [
+    { id: 'm-1', name: '发布说明', goal: '', aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z', hosting: { preset: 'workspace-write', at: '2026-11-09T01:00:00Z' },
+      sessions: [{ sessionId: 's-sort', by: 'mydsh', at: '2026-11-09T01:00:00Z', why: '派到这里' }, ...links('s-old')] },
+    { id: 'm-2', name: '看板', goal: '', sessions: [], aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z' },
+  ];
+  const presets = [{ value: 'read-only', name: 'read-only' }, { value: 'workspace-write', name: 'workspace-write' }];
+  const snapshot = buildSnapshot(input({ matters, presets }));
+  const hosted = snapshot.matters.find(matter => matter.id === 'm-1')!;
+  assert.deepEqual(hosted.hosting, { preset: 'workspace-write' });
+  assert.deepEqual(hosted.sessions.map(session => [session.id, session.by]), [['s-sort', 'mydsh'], ['s-old', 'manual']]);
+  assert.ok(!('hosting' in snapshot.matters.find(matter => matter.id === 'm-2')!));
+  assert.deepEqual(snapshot.presets, presets);
+  // Sessions outside a matter's list say nothing about how they joined.
+  assert.ok(snapshot.review.flatMap(day => day.sessions).every(session => !('by' in session)));
+  assert.deepEqual(buildSnapshot(input()).presets, []);
+});
+
+test('the presets to host under leave out the values DSH reserves, and carry only the value and the name', () => {
+  assert.deepEqual(hostingPresets([
+    { value: 'read-only', name: 'read-only' },
+    { value: 'workspace-write', name: 'workspace-write', description: 'Write inside the workspace.' },
+    { value: 'danger-full-access', name: 'danger-full-access' },
+    { value: 'auto', name: 'auto' },
+    { value: 'custom', name: 'custom' },
+  ]), [
+    { value: 'read-only', name: 'read-only' }, { value: 'workspace-write', name: 'workspace-write' }, { value: 'danger-full-access', name: 'danger-full-access' },
+  ]);
+});
+
+/** 发布说明 with its own conversation `s-talk`, and 看板, whose conversation DSH no longer lists. */
+const withConversations = (): Matter[] => [
+  { id: 'm-1', name: '发布说明', goal: '', sessions: links('s-sort'), aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z', conversation: 's-talk' },
+  { id: 'm-2', name: '看板', goal: '', sessions: [], aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z', conversation: 's-gone' },
+];
+const talk = (overrides: Partial<SessionView> = {}) => [...input().sessions, view('s-talk', '2026-11-09T05:50:00Z', { title: '发布说明', ...overrides })];
+
+test('a matter\'s conversation shows on its matter with its state, line and reply, and stays out of the unassigned list and the review', () => {
+  const sessions = talk({ preview: { kind: 'reply', text: '派了一条会话去跑测试' } });
+  const snapshot = buildSnapshot(input({ matters: withConversations(), sessions, replies: new Map([['s-talk', '派了一条会话去跑测试，跑完告诉你。']]) }));
+  const matter = snapshot.matters.find(candidate => candidate.id === 'm-1')!;
+  assert.deepEqual(matter.conversation, {
+    sessionId: 's-talk', state: 'idle', line: '派了一条会话去跑测试', lineAt: at('2026-11-09T05:50:00Z'), reply: '派了一条会话去跑测试，跑完告诉你。',
+    replyAt: at('2026-11-09T05:50:00Z'),
+  });
+  // Without the whole reply, which only this process keeps, the line still says when it is from.
+  const cold = buildSnapshot(input({ matters: withConversations(), sessions }));
+  assert.deepEqual(cold.matters.find(candidate => candidate.id === 'm-1')!.conversation, {
+    sessionId: 's-talk', state: 'idle', line: '派了一条会话去跑测试', lineAt: at('2026-11-09T05:50:00Z'),
+  });
+  assert.deepEqual(matter.sessions.map(session => session.id), ['s-sort']);
+  // A conversation DSH does not list shows none; opening the matter makes a new one.
+  assert.ok(!('conversation' in snapshot.matters.find(candidate => candidate.id === 'm-2')!));
+  assert.ok(!snapshot.unassigned.some(session => session.id === 's-talk'));
+  assert.ok(!snapshot.review.some(day => day.sessions.some(session => session.id === 's-talk')));
+  // In a turn it says so, without the reply of the turn before.
+  const running = buildSnapshot(input({
+    matters: withConversations(), sessions: talk({ state: 'running', preview: { kind: 'running' } }), replies: new Map([['s-talk', '上一轮的回复']]),
+  }));
+  assert.deepEqual(running.matters.find(candidate => candidate.id === 'm-1')!.conversation, { sessionId: 's-talk', state: 'running', running: true });
+  // Archived in DSH, it is not the matter's conversation any more.
+  const archived = buildSnapshot(input({ matters: withConversations(), sessions, workspaces: { ...input().workspaces, archived: new Set(['s-talk']) } }));
+  assert.ok(!('conversation' in archived.matters.find(candidate => candidate.id === 'm-1')!));
+});
+
+test('a matter\'s conversation that waits or failed is in 等你处理 as 对话 with its matter; my dsh\'s own session still is not', () => {
+  const sessions = talk({ state: 'waiting', wait: 'approval', preview: { kind: 'approval', tool: 'bash', since: at('2026-11-09T05:45:00Z') } })
+    .map(item => (item.id === 's-mydsh' ? { ...item, state: 'waiting' as const, wait: 'question' as const } : item));
+  const { attention } = buildSnapshot(input({ matters: withConversations(), sessions }));
+  const row = attention.find(session => session.id === 's-talk');
+  assert.deepEqual(row && { title: row.title, state: row.state, wait: row.wait, matter: row.matter }, {
+    title: '对话', state: 'waiting', wait: 'approval', matter: { id: 'm-1', name: '发布说明' },
+  });
+  assert.deepEqual(row?.preview, { kind: 'approval', tool: 'bash', since: at('2026-11-09T05:45:00Z') });
+  assert.ok(!attention.some(session => session.id === 's-mydsh'));
+  const idle = buildSnapshot(input({ matters: withConversations(), sessions: talk() }));
+  assert.ok(!idle.attention.some(session => session.id === 's-talk'));
+});
+
+test('a matter\'s schedules are DSH\'s tasks that deliver to its conversation or involve it, without ended ones, with the next run while active', () => {
+  const entries: ScheduleEntry[] = [
+    { id: 'sc-1', title: '每周五汇总这周做了什么', status: 'active', scheduledAt: '2026-11-13T10:00:00.000Z', target: { kind: 'session', sessionId: 's-talk' }, involvedSessionIds: ['s-talk'] },
+    { id: 'sc-2', title: 'Atlas 发新版时出一份报告', status: 'paused', scheduledAt: '2026-11-10T01:00:00.000Z', target: { kind: 'new' }, involvedSessionIds: ['s-talk'] },
+    { id: 'sc-3', title: '已经提醒过的', status: 'ended', scheduledAt: '2026-11-01T01:00:00.000Z', target: { kind: 'session', sessionId: 's-talk' }, involvedSessionIds: [] },
+    { id: 'sc-4', title: '别的会话的', status: 'active', scheduledAt: '2026-11-12T01:00:00.000Z', target: { kind: 'session', sessionId: 's-other' }, involvedSessionIds: ['s-other'] },
+    { id: 'sc-5', title: '只投给它', status: 'active', scheduledAt: 'not a time', target: { kind: 'session', sessionId: 's-talk' }, involvedSessionIds: [] },
+  ];
+  assert.deepEqual(matterSchedules(entries, 's-talk'), [
+    { id: 'sc-1', title: '每周五汇总这周做了什么', status: 'active', next: Date.parse('2026-11-13T10:00:00.000Z') },
+    { id: 'sc-2', title: 'Atlas 发新版时出一份报告', status: 'paused' },
+    { id: 'sc-5', title: '只投给它', status: 'active' },
+  ]);
+  const snapshot = buildSnapshot(input({ matters: withConversations(), sessions: talk(), schedules: entries }));
+  assert.deepEqual(snapshot.matters.find(candidate => candidate.id === 'm-1')!.schedules?.map(item => item.id), ['sc-1', 'sc-2', 'sc-5']);
+  assert.ok(!('schedules' in snapshot.matters.find(candidate => candidate.id === 'm-2')!));
+});
+
 test('my dsh never shows on the board, even put in a matter', () => {
   const matters: Matter[] = [{ id: 'm-1', name: '发布说明', goal: '', sessions: links('s-mydsh'), aliases: [], sources: [], createdAt: '2026-11-01T00:00:00Z' }];
   const snapshot = buildSnapshot(input({ matters }));
@@ -133,7 +234,7 @@ test('my dsh never shows on the board, even put in a matter', () => {
   assert.ok(!snapshot.review.some(day => day.sessions.some(session => session.id === 's-mydsh')));
 });
 
-test('sessions on the board carry their preview; the unassigned list, which the page does not show, leaves it out', () => {
+test('sessions on the board carry their preview, the unassigned ones too (跟进中 shows their line)', () => {
   const sessions = input().sessions.map((item): SessionView => {
     if (item.id === 's-sort') return { ...item, preview: { kind: 'running', step: '运行命令 npm test', since: at('2026-11-09T05:40:00Z') } };
     if (item.id === 's-free') return { ...item, preview: { kind: 'reply', text: '整理完了' } };
@@ -145,7 +246,7 @@ test('sessions on the board carry their preview; the unassigned list, which the 
   assert.equal(brief.sessions[1]!.preview, undefined);
   const today = snapshot.review[0]!.sessions;
   assert.deepEqual(today.find(session => session.id === 's-free')!.preview, { kind: 'reply', text: '整理完了' });
-  assert.ok(snapshot.unassigned.every(session => session.preview === undefined));
+  assert.deepEqual(snapshot.unassigned.find(session => session.id === 's-free')?.preview, { kind: 'reply', text: '整理完了' });
 });
 
 test('等你处理 lists the sessions that wait or failed, the longest wait first, with their matter', () => {
@@ -162,4 +263,40 @@ test('等你处理 lists the sessions that wait or failed, the longest wait firs
     ['s-done', 'failed', '第二期'], ['s-ask', 'waiting', '发布说明'], ['s-free', 'waiting', undefined],
   ]);
   assert.deepEqual(attention[1]!.preview, { kind: 'approval', tool: 'bash', since: at('2026-11-09T04:30:00Z') });
+});
+
+test('the snapshot carries the pending suggestions whose sessions are all still loose, with what the card shows of them', () => {
+  const pending = (id: string, change: Suggestion['change'], extra: Partial<Suggestion> = {}): Suggestion => ({
+    id, change, why: '在做同一件事', by: 'model', at: '2026-11-09T00:00:00Z', state: 'pending', ...extra,
+  });
+  const suggestions: Suggestion[] = [
+    pending('g-1', { kind: 'new', sessionIds: ['s-edge', 's-free'], name: '方案', goal: '' }),
+    pending('g-2', { kind: 'file', sessionId: 's-ahead', matterId: 'm-notes' }, { by: 'origin', rule: 'pr', why: '和「发布说明」处理的是同一个 PR a/b#1' }),
+    // A session in a matter, one archived in DSH, a subagent, a matter archived, my dsh's own session: none of these is on the card.
+    pending('g-3', { kind: 'new', sessionIds: ['s-far', 's-sort'], name: '甲', goal: '' }),
+    pending('g-4', { kind: 'file', sessionId: 's-hidden', matterId: 'm-notes' }),
+    pending('g-5', { kind: 'new', sessionIds: ['s-far', 's-child'], name: '乙', goal: '' }),
+    pending('g-6', { kind: 'file', sessionId: 's-far', matterId: 'm-done' }),
+    pending('g-7', { kind: 'file', sessionId: 's-mydsh', matterId: 'm-notes' }),
+  ];
+  const snapshot = buildSnapshot(input({ suggestions }));
+  assert.deepEqual(snapshot.suggestions, [
+    {
+      id: 'g-1', kind: 'new', name: '方案', why: '在做同一件事',
+      sessions: [{ id: 's-free', title: '未命名', lastActivity: at('2026-11-08T23:00:00Z') }, { id: 's-edge', title: '十三天前', lastActivity: at('2026-10-27T00:00:00Z') }],
+    },
+    {
+      id: 'g-2', kind: 'file', matter: { id: 'm-notes', name: '发布说明' }, why: '和「发布说明」处理的是同一个 PR a/b#1',
+      sessions: [{ id: 's-ahead', title: '时钟快了', lastActivity: at('2026-11-09T07:00:00Z') }],
+    },
+  ]);
+  // A filing into a matter the user took the session out of by hand goes; with nothing pending there is no list.
+  assert.equal(buildSnapshot(input({ suggestions: [suggestions[1]!], takenOut: new Set(['s-ahead>m-notes']) })).suggestions, undefined);
+  assert.equal(buildSnapshot(input()).suggestions, undefined);
+  // A new matter's main workspace is where most of its sessions are.
+  const placed = buildSnapshot(input({
+    suggestions: [pending('g-8', { kind: 'new', sessionIds: ['s-free', 's-ahead'], name: '方案', goal: '写清方案' })],
+    workspaces: { ...input().workspaces, workspaceOf: new Map([['s-ahead', { id: 'w-notes', title: 'release-notes' }]]) },
+  }));
+  assert.deepEqual([placed.suggestions?.[0]?.workspace, placed.suggestions?.[0]?.goal], [{ id: 'w-notes', title: 'release-notes' }, '写清方案']);
 });

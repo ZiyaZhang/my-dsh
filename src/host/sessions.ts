@@ -64,6 +64,10 @@ export interface SessionTrack {
   readonly draft?: string;
   readonly turnStart?: number;
   readonly turnEnd?: { readonly time: number; readonly failed: boolean; readonly error?: string };
+  /** The whole text of the newest assistant message this process saw, for a reply shown in full (my dsh's). */
+  readonly full?: string;
+  /** Tools whose approval the user rejected in the open or last turn, in order; a report says those operations did not run. */
+  readonly refused?: readonly string[];
 }
 
 /**
@@ -117,19 +121,22 @@ export function trackRemoved(track: SessionTrack): SessionTrack {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+/** How much of a message the full reply keeps. */
+const FULL_MAX = 8_000;
+
 const textField = (data: unknown, key: string): string | undefined => {
   const value = isRecord(data) ? data[key] : undefined;
   return typeof value === 'string' ? value : undefined;
 };
 
 /** The start of an assistant message's visible text: its text blocks joined with spaces, as DSH's turn outline joins them. */
-function messageText(message: unknown): string {
+function messageText(message: unknown, max = LINE_MAX * 4): string {
   const content = isRecord(message) && Array.isArray(message.content) ? message.content : [];
   let text = '';
   for (const block of content) {
     if (!isRecord(block) || block.type !== 'text' || typeof block.text !== 'string') continue;
     text = text ? `${text} ${block.text}` : block.text;
-    if (text.length > LINE_MAX * 4) break;
+    if (text.length > max) break;
   }
   return text;
 }
@@ -153,7 +160,7 @@ export function trackEvent(track: SessionTrack, event: SessionEventLike): Sessio
     case 'turn/start':
       return {
         ...track, turnStart: event.time, running: true, runningSeen: true, blank: false,
-        step: { label: THINKING, since: event.time }, calls: [], draft: undefined,
+        step: { label: THINKING, since: event.time }, calls: [], draft: undefined, refused: undefined,
       };
     case 'step/start':
       return track.calls.length > 0 ? track : { ...track, step: { label: THINKING, since: event.time } };
@@ -167,8 +174,9 @@ export function trackEvent(track: SessionTrack, event: SessionEventLike): Sessio
       };
     }
     case 'assistant/message': {
-      const text = clip(messageText(isRecord(data) ? data.message : undefined));
-      return text === '' || text === track.draft ? track : { ...track, draft: text };
+      const whole = messageText(isRecord(data) ? data.message : undefined, FULL_MAX);
+      const text = clip(whole);
+      return text === '' || (text === track.draft && whole === track.full) ? track : { ...track, draft: text, full: whole };
     }
     case 'approval/asked': {
       const id = textField(data, 'id');
@@ -176,9 +184,13 @@ export function trackEvent(track: SessionTrack, event: SessionEventLike): Sessio
     }
     case 'approval/decided': {
       const id = textField(data, 'id');
-      return id !== undefined && track.waits.some(wait => wait.kind === 'approval' && wait.id === id)
-        ? { ...track, waits: track.waits.filter(wait => !(wait.kind === 'approval' && wait.id === id)) }
-        : track;
+      const asked = id === undefined ? undefined : track.waits.find(wait => wait.kind === 'approval' && wait.id === id);
+      if (!asked) return track;
+      const waits = track.waits.filter(wait => wait !== asked);
+      // A rejected operation did not run, whatever the session says afterwards.
+      return textField(data, 'outcome') === 'rejected'
+        ? { ...track, waits, refused: [...(track.refused ?? []), asked.text || '一个操作'] }
+        : { ...track, waits };
     }
     case 'tool/call': {
       const id = textField(data, 'callId');
@@ -315,6 +327,10 @@ export class SessionIndex {
   event(id: string, event: SessionEventLike): void { this.apply(id, track => trackEvent(track ?? emptyTrack(id), event)); }
 
   has(id: string): boolean { return this.tracks.has(id); }
+  /** The whole newest assistant message of a session this process watched. */
+  fullReply(id: string): string | undefined { return this.tracks.get(id)?.full; }
+  /** The tools whose approval the user rejected in a session's open or last turn. */
+  refused(id: string): readonly string[] { return this.tracks.get(id)?.refused ?? []; }
   view(id: string): SessionView | undefined {
     const track = this.tracks.get(id);
     return track && sessionView(track);

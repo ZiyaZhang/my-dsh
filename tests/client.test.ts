@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { BoardSnapshot } from '../src/host/remote.ts';
 import { BoardSource, type BoardSourceDeps } from '../src/client/board-source.ts';
-import { clock, dayTitle, groupByDay, when } from '../src/client/time.ts';
+import { FULL_ACCESS, NOT_HOSTED, hostingOptions, presetView } from '../src/client/presets.ts';
+import { clock, dayTitle, groupByDay, upcoming, when } from '../src/client/time.ts';
 
 process.env.TZ = 'Asia/Shanghai';
 const at = (iso: string) => Date.parse(iso);
@@ -17,6 +18,13 @@ test('times read as the board writes them: just now, today, this year, earlier y
   assert.equal(clock(at('2026-11-08T07:03:00+08:00')), '07:03');
 });
 
+test('a task\'s next run reads as a time today, else as its date and time', () => {
+  const now = at('2026-11-09T14:30:00+08:00');
+  assert.equal(upcoming(at('2026-11-09T18:00:00+08:00'), now), '18:00');
+  assert.equal(upcoming(at('2026-11-13T18:00:00+08:00'), now), '11月13日 18:00');
+  assert.equal(upcoming(at('2027-01-02T09:05:00+08:00'), now), '2027年1月2日 09:05');
+});
+
 test('review days are today and yesterday with their dates, then plain dates', () => {
   const now = at('2026-11-09T14:30:00+08:00');
   assert.deepEqual(dayTitle({ day: '2026-11-09', daysAgo: 0 }, now), { label: '今天', date: '11月9日' });
@@ -25,7 +33,9 @@ test('review days are today and yesterday with their dates, then plain dates', (
   assert.deepEqual(dayTitle({ day: '2025-12-31', daysAgo: 13 }, at('2026-01-05T10:00:00+08:00')), { label: '2025年12月31日' });
 });
 
-const snapshot = (now: number): BoardSnapshot => ({ matters: [], unassigned: [], review: [], attention: [], assistant: { sessionId: null, cards: [] }, workspaces: [], now });
+const snapshot = (now: number): BoardSnapshot => ({
+  matters: [], unassigned: [], review: [], attention: [], assistant: { sessionId: null, cards: [] }, workspaces: [], presets: [], now,
+});
 
 /** A notice stream the test feeds by hand. */
 class FakeStream implements AsyncIterable<unknown> {
@@ -209,6 +219,27 @@ test('a reader that comes back while the last read is still in flight gets a rea
   answers[1]!();
   await settle();
   assert.deepEqual(source.getSnapshot(), { status: 'ready', snapshot: snapshot(2) });
+});
+
+test('DSH\'s three presets show by DSH\'s names with what dispatched sessions may then do; another shows by its name alone', () => {
+  const presets = [{ value: 'read-only', name: 'read-only' }, { value: 'workspace-write', name: 'workspace-write' }, { value: 'team', name: '组里的' }];
+  assert.deepEqual(presetView('read-only', presets), { name: '仅可查看', description: '派出去的会话只读，改文件前都会问你' });
+  assert.deepEqual(presetView('workspace-write', presets), { name: '工作区内修改', description: '在工作区里改文件、跑命令不问你，工作区外的先问' });
+  assert.deepEqual(presetView(FULL_ACCESS, presets), { name: '完全权限', description: '做什么都不问你，选它会再确认一次' });
+  assert.deepEqual(presetView('team', presets), { name: '组里的' });
+  assert.deepEqual(presetView('gone', presets), { name: 'gone' });
+  assert.deepEqual(presetView('constructor', presets), { name: 'constructor' });
+});
+
+test('托管 offers 不托管, then DSH\'s presets in its order, and keeps naming a preset DSH stopped offering', () => {
+  const presets = [{ value: 'read-only', name: 'read-only' }, { value: 'workspace-write', name: 'workspace-write' }, { value: FULL_ACCESS, name: FULL_ACCESS }];
+  assert.deepEqual(hostingOptions(presets, undefined).map(option => [option.value, option.name]), [
+    [null, '不托管'], ['read-only', '仅可查看'], ['workspace-write', '工作区内修改'], [FULL_ACCESS, '完全权限'],
+  ]);
+  assert.deepEqual(hostingOptions(presets, undefined)[0], { value: null, ...NOT_HOSTED });
+  assert.equal(NOT_HOSTED.description, '你说话它才动手；派出去的会话按 DSH 默认权限跑');
+  assert.deepEqual(hostingOptions([], 'team').map(option => option.value), [null, 'team']);
+  assert.deepEqual(hostingOptions([], undefined).map(option => option.value), [null]);
 });
 
 test('做事记录 groups entries by local day, keeping their order', () => {

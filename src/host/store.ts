@@ -2,14 +2,18 @@
  * Matters on disk: one JSON file in the plugin's data directory, written whole through a temporary file and a rename, so a crash leaves
  * either the old file or the new one. Changes run one at a time, each on the list the previous one left.
  *
- * Version 2 records how each session joined its matter, the matter's aliases and its context (main workspace, sources, instructions).
+ * Version 2 records how each session joined its matter, the matter's aliases and its context (main workspace, sources, instructions),
+ * the permission preset of a hosted matter (`hosting`) and the session of the matter's own conversation (`conversation`); a matter
+ * without them simply leaves them out. A `main` field from an earlier design is accepted and dropped on reading.
  * A version 1 file (M1: bare session ids) opens migrated, with every session put there by hand at the matter's creation time and no
  * sources; a copy of it stays beside it as `matters.v1.json`, and the next change writes version 2. The Host fills in the main
  * workspace once it knows the sessions ({@link fillWorkspaces} in board-index).
  */
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { LINK_SOURCES, SOURCE_KINDS, type LinkSource, type Matter, type MatterSource, type SessionLink, type SourceKind } from './remote.js';
+import {
+  LINK_SOURCES, ORIGIN_RULES, SOURCE_KINDS, type LinkSource, type Matter, type MatterSource, type OriginRule, type SessionLink, type SourceKind,
+} from './remote.js';
 import type { Changed } from './matters.js';
 
 const VERSION = 2;
@@ -20,7 +24,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 
 function isLink(value: unknown): value is SessionLink {
   return isRecord(value) && isText(value.sessionId) && LINK_SOURCES.includes(value.by as LinkSource) && isText(value.at)
-    && (value.why === undefined || isText(value.why));
+    && (value.why === undefined || isText(value.why)) && (value.rule === undefined || ORIGIN_RULES.includes(value.rule as OriginRule));
 }
 
 /** The fields both versions share. */
@@ -34,19 +38,30 @@ function isSource(value: unknown): value is MatterSource {
   return isRecord(value) && SOURCE_KINDS.includes(value.kind as SourceKind) && isText(value.value) && (value.title === undefined || isText(value.title));
 }
 
+const isHosting = (value: unknown): value is NonNullable<Matter['hosting']> => isRecord(value) && isText(value.preset) && isText(value.at);
+
 const isMatter = (value: unknown): value is Matter => isRecord(value) && isMatterBase(value)
   && Array.isArray(value.sessions) && value.sessions.every(isLink)
   && Array.isArray(value.aliases) && value.aliases.every(isText)
   && Array.isArray(value.sources) && value.sources.every(isSource)
   && (value.workspaceId === undefined || isText(value.workspaceId))
-  && (value.instructions === undefined || isText(value.instructions));
+  && (value.instructions === undefined || isText(value.instructions))
+  && (value.hosting === undefined || isHosting(value.hosting))
+  && (value.conversation === undefined || isText(value.conversation));
 
 const isMatterV1 = (value: unknown): value is Omit<Matter, 'sessions' | 'aliases'> & { sessions: string[] } => isRecord(value)
   && isMatterBase(value) && Array.isArray(value.sessions) && value.sessions.every(isText);
 
 const copy = (matter: Matter): Matter => ({
   ...matter, sessions: matter.sessions.map(link => ({ ...link })), aliases: [...matter.aliases], sources: matter.sources.map(source => ({ ...source })),
+  ...(matter.hosting ? { hosting: { ...matter.hosting } } : {}),
 });
+
+/** A matter as read from the file: a copy, without the `main` field older files may carry. */
+function read(matter: Matter): Matter {
+  const { main: _main, ...rest } = matter as Matter & { main?: unknown };
+  return copy(rest);
+}
 
 /**
  * Read a parsed matter file of either version.
@@ -54,9 +69,9 @@ const copy = (matter: Matter): Matter => ({
  */
 export function migrateMatters(parsed: unknown): { matters: Matter[]; migrated: boolean } | undefined {
   if (!isRecord(parsed) || !Array.isArray(parsed.matters)) return undefined;
-  if (parsed.version === VERSION) return parsed.matters.every(isMatter) ? { matters: parsed.matters.map(copy), migrated: false } : undefined;
+  if (parsed.version === VERSION) return parsed.matters.every(isMatter) ? { matters: parsed.matters.map(read), migrated: false } : undefined;
   if (parsed.version !== 1 || !parsed.matters.every(isMatterV1)) return undefined;
-  const matters = parsed.matters.map(({ sessions, ...matter }): Matter => ({
+  const matters = parsed.matters.map(({ sessions, ...matter }): Matter => read({
     ...matter,
     sessions: sessions.map(sessionId => ({ sessionId, by: 'manual', at: matter.createdAt })),
     aliases: [],

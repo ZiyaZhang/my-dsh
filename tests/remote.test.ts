@@ -82,6 +82,28 @@ test('parseRequest takes the my dsh actions: its session, 做事记录, undo and
   rejects({ action: 'assistant', sessionId: 's-1' }, /assistant 不接受这些字段：sessionId/);
 });
 
+test('setHosting takes a matter and a preset, or null to stop hosting', () => {
+  assert.deepEqual(parseRequest({ action: 'setHosting', id: 'm-1', preset: 'workspace-write' }), { action: 'setHosting', id: 'm-1', preset: 'workspace-write' });
+  assert.deepEqual(parseRequest({ action: 'setHosting', id: 'm-1', preset: null }), { action: 'setHosting', id: 'm-1', preset: null });
+  rejects({ action: 'setHosting', id: 'm-1' }, /setHosting 缺少字段：preset/);
+  rejects({ action: 'setHosting', preset: null }, /setHosting 缺少字段：id/);
+  rejects({ action: 'setHosting', id: 'm-1', preset: 7 }, /preset 必须是文字/);
+  rejects({ action: 'setHosting', id: 'm-1', preset: '' }, /preset 不是有效的 id/);
+  rejects({ action: 'setHosting', id: 'm-1', preset: 'workspace write' }, /preset 不是有效的 id/);
+  rejects({ action: 'setHosting', id: 'm-1', preset: 'read-only', at: '2026-11-10T00:00:00Z' }, /setHosting 不接受这些字段：at/);
+});
+
+test('assistant takes an optional matter: without one it is my dsh\'s session, with one the matter\'s conversation', () => {
+  assert.deepEqual(parseRequest({ action: 'assistant' }), { action: 'assistant' });
+  assert.deepEqual(parseRequest({ action: 'assistant', matterId: 'm-1' }), { action: 'assistant', matterId: 'm-1' });
+  rejects({ action: 'assistant', matterId: null }, /matterId 必须是文字/);
+  rejects({ action: 'assistant', matterId: 'm 1' }, /matterId 不是有效的 id/);
+  rejects({ action: 'assistant', matterId: '' }, /matterId 不是有效的 id/);
+  rejects({ action: 'assistant', matterId: 'm-1', sessionId: 's-1' }, /assistant 不接受这些字段：sessionId/);
+  // The request to start a bare session from a matter's page is gone: the matter's conversation does that.
+  rejects({ action: 'startInMatter', matterId: 'm-1', prompt: '看一下' }, /没有这个操作/);
+});
+
 test('createMatter may carry a context; setContext replaces one; checkPath takes a path', () => {
   const sources = [
     { kind: 'folder', value: '/work/kb', title: 'kb' },
@@ -103,4 +125,23 @@ test('createMatter may carry a context; setContext replaces one; checkPath takes
   rejects({ action: 'setContext', id: 'm-1', workspaceId: null, sources: [], instructions: '长'.repeat(2_001) }, /指令最多 2000 个字/);
   rejects({ action: 'checkPath', path: 'relative/dir' }, /要写完整路径/);
   rejects({ action: 'checkPath', path: '' }, /要写完整路径/);
+});
+
+test('the memory actions: merge a matter now, open one file of its index by its relative path, and read a 做事记录 entry\'s diff', () => {
+  assert.deepEqual(parseRequest({ action: 'mergeMemory', id: 'm-1' }), { action: 'mergeMemory', id: 'm-1' });
+  assert.deepEqual(parseRequest({ action: 'memoryFile', matterId: 'm-1', path: ' 规则/差距报告格式.md ' }), { action: 'memoryFile', matterId: 'm-1', path: '规则/差距报告格式.md' });
+  assert.deepEqual(parseRequest({ action: 'activityDiff', id: 'a-1' }), { action: 'activityDiff', id: 'a-1' });
+  for (const path of ['', '/etc/passwd', '规则/../../x.md', '规则/a\nb.md']) rejects({ action: 'memoryFile', matterId: 'm-1', path }, /不是记忆里的文件/);
+  rejects({ action: 'memoryFile', matterId: 'm-1' }, /memoryFile 缺少字段：path/);
+  // The notes' own actions are gone with the notes.
+  rejects({ action: 'tidyNotes', id: 'm-1' }, /没有这个操作/);
+  rejects({ action: 'editNote', matterId: 'm-1', noteId: 'n-1', text: 'x' }, /没有这个操作/);
+});
+
+test('a suggestion of automatic grouping is accepted or declined by its id, and nothing else', () => {
+  assert.deepEqual(parseRequest({ action: 'acceptSuggestion', id: 'sg-1' }), { action: 'acceptSuggestion', id: 'sg-1' });
+  assert.deepEqual(parseRequest({ action: 'declineSuggestion', id: 'sg-1' }), { action: 'declineSuggestion', id: 'sg-1' });
+  rejects({ action: 'acceptSuggestion' }, /acceptSuggestion 缺少字段：id/);
+  rejects({ action: 'declineSuggestion', id: 'sg 1' }, /id 不是有效的 id/);
+  rejects({ action: 'acceptSuggestion', id: 'sg-1', name: '改个名' }, /acceptSuggestion 不接受这些字段：name/);
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { openAssistant, type AssistantDeps } from '../src/client/assistant.ts';
+import { knownSession, openAssistant, type AssistantDeps } from '../src/client/assistant.ts';
 
 function harness(options: { knownAfterRefresh?: boolean; knownAtStart?: boolean } = {}) {
   const list = new Set<string>(options.knownAtStart ? ['s-mydsh'] : []);
@@ -47,4 +47,15 @@ test('a session the list never learns fails after the wait; an abort retains not
   await assert.rejects(opening, /closed/);
   assert.deepEqual(aborted.retained, []);
   assert.equal(aborted.listeners.size, 0);
+});
+
+test('a way into a conversation waits for the list to know the session, without retaining it', async () => {
+  const h = harness();
+  const known = knownSession(h.deps, new AbortController().signal);
+  await new Promise(resolve => setImmediate(resolve));
+  h.arrive();
+  assert.equal(await known, 's-mydsh');
+  assert.deepEqual(h.retained, []);
+  const missing = harness();
+  await assert.rejects(knownSession({ ...missing.deps, missing: '会话列表里还没有这件事的对话' }, new AbortController().signal, 20), /会话列表里还没有这件事的对话/);
 });

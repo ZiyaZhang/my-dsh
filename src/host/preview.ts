@@ -134,8 +134,8 @@ export function previewLine(preview: Preview | undefined, now: number): string {
       const head = preview.step ? `正在：${preview.step}` : '正在运行';
       return preview.since === undefined ? head : `${head} · ${elapsed(now - preview.since)}`;
     }
-    case 'question': return preview.text ? `在等你回答：${preview.text}` : '在等你回答';
-    case 'approval': return preview.tool ? `在等你批准：${preview.tool}` : '在等你批准';
+    case 'question': return preview.text ? `等待回答：${preview.text}` : '等待回答';
+    case 'approval': return preview.tool ? `等待审批：${preview.tool}` : '等待审批';
     case 'failed': return preview.error ? `失败：${preview.error}` : '失败';
     case 'reply': return preview.text;
   }

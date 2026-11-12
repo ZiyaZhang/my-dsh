@@ -15,10 +15,10 @@ test('a running session says what it is doing and for how many whole minutes', (
 });
 
 test('a waiting session says what it asks or which tool waits for approval', () => {
-  assert.equal(previewLine({ kind: 'question', text: '先改注释还是先改代码？', since: ago(5) }, NOW), '在等你回答：先改注释还是先改代码？');
-  assert.equal(previewLine({ kind: 'approval', tool: 'bash', since: ago(5) }, NOW), '在等你批准：bash');
-  assert.equal(previewLine({ kind: 'question', text: '', since: ago(5) }, NOW), '在等你回答');
-  assert.equal(previewLine({ kind: 'approval', tool: '', since: ago(5) }, NOW), '在等你批准');
+  assert.equal(previewLine({ kind: 'question', text: '先改注释还是先改代码？', since: ago(5) }, NOW), '等待回答：先改注释还是先改代码？');
+  assert.equal(previewLine({ kind: 'approval', tool: 'bash', since: ago(5) }, NOW), '等待审批：bash');
+  assert.equal(previewLine({ kind: 'question', text: '', since: ago(5) }, NOW), '等待回答');
+  assert.equal(previewLine({ kind: 'approval', tool: '', since: ago(5) }, NOW), '等待审批');
 });
 
 test('a failed session gives the error; an idle one the start of its last reply; nothing known says nothing', () => {

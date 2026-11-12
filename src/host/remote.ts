@@ -9,10 +9,15 @@ export type { Preview } from './preview.js';
 
 /**
  * How a session came into a matter: `manual` the user put it there, `mydsh` my dsh started it there, `origin` filed by where it came from
- * (who started it, a fork, a branch, a PR, an automation task) and `model` filed by the model. M2 writes the first two.
+ * (the same scheduled task, PR or branch, or an @-reference) and `model` filed by the model. The last two are suggestions of automatic
+ * grouping (自动归类) the user accepted.
  */
 export type LinkSource = 'manual' | 'mydsh' | 'origin' | 'model';
 export const LINK_SOURCES: readonly LinkSource[] = ['manual', 'mydsh', 'origin', 'model'];
+
+/** The origin rule behind an `origin` link: the same scheduled task, the same PR, the same branch, or an @-reference to a session. */
+export type OriginRule = 'schedule' | 'pr' | 'branch' | 'reference';
+export const ORIGIN_RULES: readonly OriginRule[] = ['schedule', 'pr', 'branch', 'reference'];
 
 /** One session in a matter, with how and when it got there. */
 export interface SessionLink {
@@ -22,6 +27,8 @@ export interface SessionLink {
   at: string;
   /** One sentence, when whoever made the link gave a reason. */
   why?: string;
+  /** `origin`: the rule that matched. */
+  rule?: OriginRule;
 }
 
 /** What a matter's context points at: a folder or file on this machine, a PR, a document, or another link. */
@@ -36,7 +43,7 @@ export interface MatterSource {
   title?: string;
 }
 
-/** A matter: what a group of sessions is for. Big matters have a main conversation; the rest are only a board. */
+/** A matter: what a group of sessions is for, with its context and the permissions the sessions my dsh opens in it run under. */
 export interface Matter {
   id: string;
   name: string;
@@ -52,8 +59,10 @@ export interface Matter {
   sources: MatterSource[];
   /** The user's standing requests for this matter, at most 2,000 characters. */
   instructions?: string;
-  /** The session id of its main conversation, once one is opened. */
-  main?: string;
+  /** Set while the user hosts the matter (托管): the DSH permission preset the sessions my dsh opens in it run under, and when it was set. */
+  hosting?: { preset: string; at: string };
+  /** The session of the matter's own conversation, once it is opened. It is not one of the matter's `sessions`. */
+  conversation?: string;
   createdAt: string;
   archivedAt?: string;
 }
@@ -86,6 +95,78 @@ export interface BoardSession {
   archived?: true;
   /** What the line under its title is about; absent when nothing is known, and on the unassigned list, which the page does not show. */
   preview?: Preview;
+  /** In a matter's list: how the session got into the matter; `mydsh` when my dsh opened it. */
+  by?: LinkSource;
+}
+
+export const NOTE_KINDS = ['rule', 'decision', 'answer', 'trap', 'todo'] as const;
+export type NoteKind = typeof NOTE_KINDS[number];
+
+/** One line of a matter's notes (事项笔记) in notes.json, from before 事项记忆; read once to move them into memory files. */
+export interface NoteView {
+  id: string;
+  kind: NoteKind;
+  text: string;
+  /** Session ids the line came from. */
+  sources: string[];
+  /** `dream` for a tidy pass, `user` for a line the user wrote or edited; a pass keeps the user's lines. */
+  by: 'dream' | 'user';
+  updatedAt: string;
+}
+
+/** One entry of a matter's memory index, as the page lists it. */
+export interface MemoryRowView {
+  /** Relative to the memory folder: `规则/差距报告格式.md`. */
+  path: string;
+  /** The category folder: 规则, 定下的, 答过的, 坑 or 没做完. */
+  category: string;
+  /** The file's description, as the index line shows it. */
+  description: string;
+  /** Not checked yet; never set on the user's entries. */
+  unverified?: true;
+}
+
+/** 事项记忆 on a matter's page: the index's entries in index order, the files left out of it, and the last merge. */
+export interface MemoryView {
+  /** The memory folder, absolute. */
+  dir: string;
+  rows: MemoryRowView[];
+  /** Files left out of the index, with why. */
+  flagged: { path: string; reason: string }[];
+  /** When the last merge (整理) finished. */
+  mergedAt?: string;
+  /** A merge is running. */
+  merging?: true;
+}
+
+/** One memory file opened on the page. Sources name the sessions they came from as the page shows them. */
+export interface MemoryFileView {
+  path: string;
+  category: string;
+  name: string;
+  description: string;
+  by: string;
+  /** The user said it; only the matter's conversation changes it. */
+  userOwned: boolean;
+  sources: { id: string; title: string }[];
+  verified: string;
+  /** `updated` as written. */
+  updated?: string;
+  body: string;
+  /** Soft: over 4 KB, a description over 150 characters. */
+  warnings: string[];
+}
+
+/** One row of a matter's 产物: a file a session of the matter wrote, or a new folder of several, newest first. */
+export interface ArtifactRowView {
+  path: string;
+  label: string;
+  folder: boolean;
+  files: number;
+  sessionId: string;
+  /** The session's title as the page shows it; 对话 for the matter's conversation. */
+  title: string;
+  at: number;
 }
 
 export interface BoardMatter {
@@ -96,12 +177,45 @@ export interface BoardMatter {
   workspace?: { id: string; title: string };
   sources: MatterSource[];
   instructions?: string;
+  /** Set while the matter is hosted (托管): the permission preset the sessions my dsh opens in it run under. */
+  hosting?: { preset: string };
   createdAt: string;
   archivedAt?: string;
   /** Newest activity first. Ids the session list does not know are left out. */
   sessions: BoardSession[];
   /** Newest session activity, or the creation time of a matter without sessions. */
   lastActivity: number;
+  /** 事项记忆, once its folder was read. */
+  memory?: MemoryView;
+  /** 产物: what the matter's sessions wrote, newest first; absent while there is none. */
+  artifacts?: ArtifactRowView[];
+  /** The matter's own conversation, while its session is listed: what it is doing and its newest reply, as my dsh's own shows. */
+  conversation?: ConversationView;
+  /** DSH's scheduled tasks that deliver to the matter's conversation or involve it, in DSH's order; ended ones are left out. */
+  schedules?: MatterSchedule[];
+}
+
+/** A conversation as the page shows it over the board. `reply` is the newest reply in full, once its turn ended. */
+export interface ConversationView {
+  sessionId: string;
+  state: SessionState;
+  wait?: WaitKind;
+  /** How the newest reply starts. */
+  line?: string;
+  /** Epoch ms of the session's last activity, which `line` is from, once its turn ended. */
+  lineAt?: number;
+  reply?: string;
+  /** Epoch ms the turn of `reply` ended. */
+  replyAt?: number;
+  running?: boolean;
+}
+
+/** One of DSH's scheduled tasks on a matter. `next` is the next occurrence, epoch ms, while the task is active. */
+export interface MatterSchedule {
+  id: string;
+  title: string;
+  status: 'active' | 'paused' | 'ended';
+  next?: number;
 }
 
 /** A session in the review, with the matter it belongs to. */
@@ -122,28 +236,76 @@ export interface ReviewDay {
 export interface BoardSnapshot {
   /** In-progress matters first, newest activity first; archived ones after them, newest archive first. */
   matters: BoardMatter[];
-  /** Sessions in no matter, newest activity first; archived, blank and subagent sessions are left out. */
+  /** Sessions in no matter, newest activity first; archived, blank and subagent sessions, and the conversations, are left out. */
   unassigned: BoardSession[];
-  /** The last 14 local days that had activity, today first. */
+  /** The last 14 local days that had activity, today first; the conversations are left out. */
   review: ReviewDay[];
-  /** Sessions that wait for the user or whose last turn failed, the longest wait first, for 等你处理. */
+  /**
+   * Sessions that wait for the user or whose last turn failed, the longest wait first, for 待处理. A matter's conversation is among
+   * them with its matter and the title 对话.
+   */
   attention: ReviewSession[];
-  /** my dsh's session and the cards under its turns. */
+  /** my dsh's session, and the cards under its turns and under those of each matter's conversation. */
   assistant: AssistantView;
   /** DSH's workspaces, for picking a matter's main workspace. */
   workspaces: { id: string; title: string; path: string }[];
+  /** The permission presets a matter can be hosted under, in DSH's order; empty when DSH has no permission preset service. */
+  presets: { value: string; name: string }[];
   /** The workspace of the most recently active session that has one. */
   recentWorkspaceId?: string;
+  /** Numbers about the user's DSH as a whole, for my dsh's head. */
+  usage?: UsageStats;
+  /** Pending suggestions of automatic grouping whose sessions are all still loose, new matters first; absent while there are none. */
+  suggestions?: SuggestionView[];
   /** Host time the snapshot was taken, epoch ms. */
   now: number;
 }
 
 /**
- * One thing in 做事记录. `start`: my dsh started a session in a matter. `send`: my dsh sent a message to a session. `file`: the user put
- * a session in a matter by hand, or moved it there. `unfile`: the user took one out by hand. `manage`: a new, merged or renamed matter the
- * user confirmed on a card. `undo`: the user took back an earlier entry.
+ * A suggestion of automatic grouping (自动归类) as the card under my dsh's input shows it: `new` puts several loose sessions in a new
+ * matter, `file` puts one loose session in a matter in progress. Names and titles are as they are now; the sessions are newest first.
  */
-export type ActivityKind = 'start' | 'send' | 'file' | 'unfile' | 'manage' | 'undo';
+export interface SuggestionView {
+  id: string;
+  kind: 'new' | 'file';
+  /** `new`: the matter's name and goal. */
+  name?: string;
+  goal?: string;
+  /** `new`: the main workspace the matter gets, the one most of its sessions are in; absent when none of them is in one. */
+  workspace?: { id: string; title: string };
+  /** `file`: the matter the session goes into. */
+  matter?: { id: string; name: string };
+  /** Each with its last activity, epoch ms. */
+  sessions: { id: string; title: string; lastActivity: number }[];
+  /** One sentence. */
+  why: string;
+}
+
+/** Numbers about the user's DSH as a whole; one the Host could not read is left out. */
+export interface UsageStats {
+  /** When the user's first top-level session was made, epoch ms. */
+  firstSessionAt?: number;
+  /** Top-level sessions that have a turn. */
+  sessions?: number;
+  /** Tokens across the sessions that carry a total, subagents and forks left out. */
+  tokens?: number;
+  /** How many sessions `tokens` covers; fewer than `sessions` makes it a lower bound. */
+  tokenSessions?: number;
+  /** Plugins the plugin page lists under 已安装插件. */
+  plugins?: number;
+}
+
+/**
+ * One thing in 做事记录. `start`: my dsh started a session in a matter. `send`: my dsh sent a message to a session. `note`: my dsh wrote
+ * what the user said into a matter's memory. `forward`: my dsh passed the user's words to a matter's conversation. `file`: the user put a
+ * session in a matter by hand, or moved it there. `unfile`: the user took one out by hand. `manage`: a new, merged or renamed matter the
+ * user confirmed on a card. `undo`: the user took back an earlier entry. `memory`: a file of a matter's memory changed. `group`: the user
+ * accepted a suggestion of automatic grouping, a new matter with its sessions or one session put in a matter.
+ */
+export type ActivityKind = 'start' | 'send' | 'note' | 'forward' | 'file' | 'unfile' | 'manage' | 'undo' | 'memory' | 'group';
+
+/** Who changed a memory file: a session of the matter, the user in an editor, 补记, 合并, or my dsh writing down what the user said. */
+export type MemoryAuthor = 'session' | 'user' | 'capture' | 'merge' | 'note';
 
 export interface ActivityEntry {
   id: string;
@@ -158,10 +320,18 @@ export interface ActivityEntry {
   /** What happened, in one line, with the names as they were then. */
   text: string;
   why: string;
-  /** `start` and `send`: what my dsh sent to the session. */
+  /** `start` and `send`: what my dsh sent to the session; `forward`: the user's words as they went to the conversation (`sessionId`). */
   task?: string;
-  /** `start` and `send`: where the receipt sits in my dsh's conversation. */
+  /** `note`: the line it wrote; from 事项记忆 on, the file it wrote and the file's hash, which undo needs unchanged. */
+  note?: { id: string; text: string; path?: string; hash?: string };
+  /** `memory` and `note`: the file that changed, how, and by whom; 做事记录 shows its diff on request. */
+  memory?: { path: string; change: 'add' | 'update' | 'delete'; by: MemoryAuthor };
+  /** `start`, `send`, `note` and `forward`: where the receipt sits in my dsh's conversation. */
   card?: CardPlace;
+  /** `group`: the sessions it put in the matter, how their links were made (`origin` or `model`), and whether it made the matter. */
+  sessions?: string[];
+  by?: LinkSource;
+  created?: true;
   /** Set once the entry was taken back. */
   undoneAt?: string;
   /** `undo`: the entry it took back. */
@@ -225,13 +395,32 @@ export interface WhichQuestion extends CardPlace {
 export type CardView =
   | (CardPlace & { type: 'proposal'; id: string; kind: ProposalChange['kind']; line: string; state: Proposal['state'] })
   | (CardPlace & { type: 'which'; id: string; phrase: string; candidates: WhichCandidate[]; state: WhichQuestion['state']; answer?: WhichCandidate | null })
-  /** The receipt my dsh leaves under the turn that started a session or sent it a message; `id` is the activity entry. */
-  | (CardPlace & { type: 'receipt'; id: string; kind: 'start' | 'send'; line: string; target: string; undoable: boolean; undone: boolean });
+  /**
+   * The receipt my dsh leaves under the turn that started a session, sent it a message or wrote a note; `id` is the activity entry and
+   * `target` the session 打开 opens, which a note has none of.
+   */
+  | (CardPlace & { type: 'receipt'; id: string; kind: 'start' | 'send' | 'note'; line: string; target?: string; undoable: boolean; undone: boolean })
+  | ForwardCardView;
+
+/**
+ * The receipt my dsh leaves under the turn that passed the user's words to a matter's conversation: `id` is the activity entry,
+ * `conversationId` the conversation the words went to, `at` when (epoch ms), `matterName` the name then. `latest` marks the newest pass to
+ * that matter, the one card that shows what the conversation did with it.
+ */
+export type ForwardCardView = CardPlace & { type: 'forward'; id: string; matterId: string; matterName: string; conversationId: string; at: number; latest: boolean };
 
 export interface AssistantView {
   /** my dsh's session, once it exists. */
   sessionId: string | null;
+  /** The cards of my dsh's session and of the matters' conversations; each names the session and turn it sits under. */
   cards: CardView[];
+  /** How my dsh's last reply starts, for the one line a folded conversation shows. */
+  line?: string;
+  /** my dsh's newest reply in full and when its turn ended, for the reply shown over the board. */
+  reply?: string;
+  replyAt?: number;
+  /** my dsh is in a turn. */
+  running?: boolean;
 }
 
 export type MyDshRequest =
@@ -243,14 +432,26 @@ export type MyDshRequest =
   | { action: 'unarchiveMatter'; id: string }
   | { action: 'addSession'; matterId: string; sessionId: string }
   | { action: 'removeSession'; sessionId: string }
-  | { action: 'assistant' }
+  /** my dsh's session, or with `matterId` the matter's own conversation; either is made when there is none. */
+  | { action: 'assistant'; matterId?: string }
   | { action: 'activity' }
   | { action: 'undo'; id: string }
   | { action: 'acceptProposal'; id: string }
   | { action: 'declineProposal'; id: string }
   | { action: 'answerWhich'; id: string; candidateId: string | null }
   | ({ action: 'setContext'; id: string } & ContextInput)
-  | { action: 'checkPath'; path: string };
+  | { action: 'checkPath'; path: string }
+  /** Merge (整理) a matter's memory now. */
+  | { action: 'mergeMemory'; id: string }
+  /** One file of a matter's memory index, opened on the page. */
+  | { action: 'memoryFile'; matterId: string; path: string }
+  /** The diff a 做事记录 entry about a memory file keeps. */
+  | { action: 'activityDiff'; id: string }
+  /** `preset: null` stops hosting the matter. */
+  | { action: 'setHosting'; id: string; preset: string | null }
+  /** A suggestion of automatic grouping: make the matter it names or file the session, or decline it for good. */
+  | { action: 'acceptSuggestion'; id: string }
+  | { action: 'declineSuggestion'; id: string };
 
 /** A file dropped or picked in the browser and uploaded through DSH; the Host copies it into the matter's folder. */
 export interface UploadSource {
@@ -277,7 +478,7 @@ export interface MyDshResults {
   unarchiveMatter: Matter;
   addSession: Matter;
   removeSession: Matter | null;
-  /** my dsh's session, made when there is none. */
+  /** my dsh's session or the matter's conversation, made when there is none. */
   assistant: { sessionId: string };
   /** Newest first. */
   activity: ActivityView[];
@@ -289,6 +490,15 @@ export interface MyDshResults {
   setContext: Matter;
   /** The path as a source, once the Host found it. */
   checkPath: MatterSource;
+  /** When the merge finished. */
+  mergeMemory: { mergedAt: string };
+  memoryFile: MemoryFileView;
+  /** '' when the entry keeps none. */
+  activityDiff: { diff: string };
+  setHosting: Matter;
+  /** The matter it made, or the one the session went into. */
+  acceptSuggestion: Matter;
+  declineSuggestion: { id: string };
 }
 export type MyDshResponse = MyDshResults[keyof MyDshResults];
 export type MyDshResult<R extends MyDshRequest> = MyDshResults[R['action']];
@@ -303,7 +513,7 @@ export class RequestError extends Error {}
 export const NAME_MAX = 40;
 export const GOAL_MAX = 120;
 
-/** The fields each action takes, all required; `answerWhich` takes null as its candidateId for 都不是. */
+/** The fields each action takes, all required; `answerWhich` takes null as its candidateId for 都不是, `setHosting` null as its preset. */
 const FIELDS: { [A in MyDshRequest['action']]: readonly string[] } = {
   snapshot: [],
   createMatter: ['name', 'goal'],
@@ -321,15 +531,24 @@ const FIELDS: { [A in MyDshRequest['action']]: readonly string[] } = {
   answerWhich: ['id', 'candidateId'],
   setContext: ['id', 'workspaceId', 'sources', 'instructions'],
   checkPath: ['path'],
+  mergeMemory: ['id'],
+  memoryFile: ['matterId', 'path'],
+  activityDiff: ['id'],
+  setHosting: ['id', 'preset'],
+  acceptSuggestion: ['id'],
+  declineSuggestion: ['id'],
 };
 
 /** Fields an action may leave out. */
 const OPTIONAL: { [A in MyDshRequest['action']]?: readonly string[] } = {
   createMatter: ['workspaceId', 'sources', 'instructions'],
+  assistant: ['matterId'],
 };
 
 export const SOURCES_MAX = 30;
 export const INSTRUCTIONS_MAX = 2_000;
+/** The longest task, message or prompt the plugin sends a session, in characters. */
+export const TASK_MAX = 20_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -422,7 +641,7 @@ export function parseRequest(value: unknown): MyDshRequest {
     case 'unarchiveMatter': return { action, id: id(value, 'id') };
     case 'addSession': return { action, matterId: id(value, 'matterId'), sessionId: id(value, 'sessionId') };
     case 'removeSession': return { action, sessionId: id(value, 'sessionId') };
-    case 'assistant': return { action };
+    case 'assistant': return value.matterId === undefined ? { action } : { action, matterId: id(value, 'matterId') };
     case 'activity': return { action };
     case 'undo': return { action, id: id(value, 'id') };
     case 'acceptProposal': return { action, id: id(value, 'id') };
@@ -430,6 +649,16 @@ export function parseRequest(value: unknown): MyDshRequest {
     case 'answerWhich': return { action, id: id(value, 'id'), candidateId: value.candidateId === null ? null : id(value, 'candidateId') };
     case 'setContext': return { action, id: id(value, 'id'), ...contextInput(value) };
     case 'checkPath': return { action, path: absolutePath(text(value, 'path')) };
+    case 'mergeMemory': return { action, id: id(value, 'id') };
+    case 'memoryFile': {
+      const path = text(value, 'path').trim();
+      if (!path || path.length > 300 || /\p{Cc}/u.test(path) || path.startsWith('/') || path.split('/').includes('..')) throw new RequestError('不是记忆里的文件');
+      return { action, matterId: id(value, 'matterId'), path };
+    }
+    case 'activityDiff': return { action, id: id(value, 'id') };
+    case 'setHosting': return { action, id: id(value, 'id'), preset: value.preset === null ? null : id(value, 'preset') };
+    case 'acceptSuggestion': return { action, id: id(value, 'id') };
+    case 'declineSuggestion': return { action, id: id(value, 'id') };
   }
 }
 

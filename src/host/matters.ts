@@ -124,6 +124,24 @@ export function setGoal(matters: readonly Matter[], id: string, goal: string): C
   return replace(matters, id, matter => ({ ...matter, goal }));
 }
 
+/** Host the matter under a permission preset (托管), or stop hosting it with null. */
+export function setHosting(matters: readonly Matter[], id: string, hosting: { preset: string; at: string } | null): Changed {
+  return replace(matters, id, (matter) => {
+    const { hosting: _hosting, ...rest } = matter;
+    return hosting ? { ...rest, hosting: { preset: hosting.preset, at: hosting.at } } : rest;
+  });
+}
+
+/** Record the session of the matter's own conversation, replacing one that is gone. */
+export function setConversation(matters: readonly Matter[], id: string, sessionId: string): Changed {
+  return replace(matters, id, matter => ({ ...matter, conversation: sessionId }));
+}
+
+/** The matter whose own conversation the session is, if any. */
+export function conversationOf(matters: readonly Matter[], sessionId: string): Matter | undefined {
+  return matters.find(matter => matter.conversation === sessionId);
+}
+
 /** Remember the words the user used for the matter, cleaned by {@link cleanPhrase}. A phrase that leaves nothing changes nothing. */
 export function addAlias(matters: readonly Matter[], id: string, phrase: string): Changed {
   const cleaned = /[\r\n]/.test(phrase) ? undefined : cleanPhrase(phrase);
@@ -165,7 +183,8 @@ export function removeSession(matters: readonly Matter[], sessionId: string): Ch
 
 /**
  * Merge `fromId` into `intoId`: its sessions follow with the links they had, its sources join the ones the staying matter lacks, its
- * name and aliases become aliases of the matter that stays, and it leaves the list. Sessions arriving in an archived matter bring it
+ * name and aliases become aliases of the matter that stays, and it leaves the list. The staying matter keeps its own hosting and its own
+ * conversation; the merged matter's conversation stays in DSH as an ordinary session. Sessions arriving in an archived matter bring it
  * back, as in {@link addSession}.
  */
 export function mergeMatters(matters: readonly Matter[], fromId: string, intoId: string): Changed {

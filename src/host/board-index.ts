@@ -42,6 +42,8 @@ export interface IndexMatter {
   sources: MatterSource[];
   /** The user's standing requests for it. */
   instructions?: string;
+  /** Set while the user hosts it (托管): the permission preset the sessions my dsh opens in it run under. */
+  hosting?: { preset: string };
   /** `#1234`, as far as the plugin knows them: from the name, the goal, session titles and what my dsh sent. */
   prs: string[];
   /** Links and document paths from the same places. */
@@ -134,6 +136,7 @@ export function buildBoardIndex(input: IndexInput): BoardIndex {
       id: matter.id, name: matter.name, goal: matter.goal, aliases: [...matter.aliases], archived: matter.archivedAt !== undefined,
       ...(matter.workspaceId && existing.has(matter.workspaceId) ? { workspaceId: matter.workspaceId } : {}),
       sources: matter.sources.map(source => ({ ...source })), ...(matter.instructions ? { instructions: matter.instructions } : {}),
+      ...(matter.hosting ? { hosting: { preset: matter.hosting.preset } } : {}),
       ...extractRefs([matter.name, matter.goal, ...titles, ...sent]),
       lastActivity: iso(known.length ? newest : Date.parse(matter.createdAt)),
     };
@@ -185,7 +188,7 @@ function cut(text: string, max: number): string {
   return characters.length > max ? `${characters.slice(0, max).join('')}…` : flat;
 }
 const WAIT: Record<WaitKind, string> = { question: '在等你回答', approval: '在等你批准' };
-const BY: Record<LinkSource, string> = { manual: '', mydsh: 'my dsh 开的', origin: '按来头归的', model: '模型归的' };
+const BY: Record<LinkSource, string> = { manual: '', mydsh: '派出去的', origin: '按来头归的', model: '模型归的' };
 
 /** `HH:mm` on the same local day, `M月D日 HH:mm` this year, `YYYY年M月D日` before. */
 export function stamp(ms: number, now: number, timeZone: string): string {
@@ -225,6 +228,7 @@ export function indexContext(index: BoardIndex, clock: { now: number; timeZone: 
       .sort((a, b) => Date.parse(b.session.lastActivity) - Date.parse(a.session.lastActivity));
     const used = unique(own.flatMap(({ session }) => session.workspaceId ? [workspaces.get(session.workspaceId)!] : []));
     const head = [`事项「${matter.name}」 id=${matter.id}`];
+    if (matter.hosting) head.push(`hosting.preset=${matter.hosting.preset}`);
     if (matter.goal) head.push(`目标：${matter.goal}`);
     if (matter.aliases.length) head.push(`别名：${matter.aliases.join('、')}`);
     if (matter.prs.length) head.push(`PR：${matter.prs.join('、')}`);

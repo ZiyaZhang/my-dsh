@@ -23,6 +23,11 @@ export function when(ms: number, now: number): string {
   return date(then.getFullYear(), then.getMonth() + 1, then.getDate(), today.getFullYear());
 }
 
+/** A moment ahead, such as a task's next run: `HH:mm` today, else its date as {@link when} writes it and `HH:mm`. */
+export function upcoming(ms: number, now: number): string {
+  return sameDay(new Date(ms), new Date(now)) ? clock(ms) : `${when(ms, now)} ${clock(ms)}`;
+}
+
 /** A review day's heading: 今天 and 昨天 carry their date beside them; older days are their date. */
 export function dayTitle(day: { day: string; daysAgo: number }, now: number): { label: string; date?: string } {
   const [year, month, dayOfMonth] = day.day.split('-').map(Number) as [number, number, number];

@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import type { ActivityEntry, Matter, Proposal, SessionLink, WhichQuestion } from '../src/host/remote.ts';
 import {
-  CorrectionLog, correctionLine, declineCorrection, membershipCorrection, pickCorrection, undoCorrection, type Correction,
+  CorrectionLog, correctionLine, declineCorrection, membershipCorrection, pickCorrection, suggestionCorrection, takenOutKeys, undoCorrection, type Correction,
 } from '../src/host/corrections.ts';
+import type { Suggestion } from '../src/host/grouping.ts';
 
 const T0 = '2026-11-09T01:00:00.000Z';
 const T1 = '2026-11-09T02:00:00.000Z';
@@ -87,4 +88,50 @@ test('a correction that cannot be written does not fail the change that caused i
   await log.append(membershipCorrection(undefined, 'm-brief', 's-9', T0)!);
   await quiet.append(membershipCorrection(undefined, 'm-brief', 's-9', T0)!);
   assert.equal(failures.length, 1);
+});
+
+test('a declined suggestion records what it would have changed, where it came from and why; a link\'s rule goes with what it replaced', () => {
+  const suggestion: Suggestion = {
+    id: 'sg-1', change: { kind: 'file', sessionId: 's-3', matterId: 'm-brief' }, why: '在同一个分支 feat/x 上', by: 'origin', rule: 'branch', at: T0, state: 'declined',
+    decidedAt: T1,
+  };
+  assert.deepEqual(suggestionCorrection(suggestion, T1), {
+    at: T1, kind: 'decline', suggestion: 'sg-1',
+    decided: { change: { kind: 'file', sessionId: 's-3', matterId: 'm-brief' }, by: 'origin', rule: 'branch', why: '在同一个分支 feat/x 上' }, chosen: null,
+  });
+  const ruled: SessionLink = { ...link('s-1', 'origin', '在同一个分支 feat/x 上'), rule: 'branch' };
+  const brief = matter('m-brief', [ruled]);
+  assert.deepEqual(membershipCorrection({ matter: brief, link: ruled }, null, 's-1', T1)?.decided, {
+    matterId: 'm-brief', by: 'origin', at: T0, why: '在同一个分支 feat/x 上', rule: 'branch',
+  });
+});
+
+test('undoing an accepted suggestion records the sessions it took out and how their links were made', () => {
+  const entry: ActivityEntry = {
+    id: 'a-3', at: T0, kind: 'group', matterId: 'm-new', sessions: ['s-1', 's-2'], created: true, by: 'model', text: '新起事项「看板」，放进 2 个会话', why: '都在改看板',
+  };
+  assert.deepEqual(undoCorrection(entry, T1), {
+    at: T1, kind: 'undo', activity: 'a-3', matterId: 'm-new', sessionIds: ['s-1', 's-2'],
+    decided: { kind: 'group', by: 'model', text: '新起事项「看板」，放进 2 个会话', why: '都在改看板' }, chosen: null,
+  });
+});
+
+test('the log knows each matter the user took a session out of, from the file it opens and from each line it appends', async () => {
+  const brief = matter('m-brief', [link('s-1', 'origin', '同一个 PR a/b#1'), link('s-2', 'model', '都在改周报')]);
+  assert.deepEqual(takenOutKeys(membershipCorrection(undefined, 'm-brief', 's-9', T0)!), []);
+  assert.deepEqual(takenOutKeys(pickCorrection(question(), null, T1)), []);
+  const directory = await mkdtemp(join(tmpdir(), 'my-dsh-'));
+  await writeFile(join(directory, 'corrections.jsonl'), [
+    correctionLine(membershipCorrection({ matter: brief, link: brief.sessions[0]! }, null, 's-1', T1)!).trim(), 'not json', '{"kind":7}', '',
+  ].join('\n'), 'utf8');
+  const log = new CorrectionLog(directory);
+  await log.open();
+  assert.deepEqual([...log.takenOut()], ['s-1>m-brief']);
+  await log.append(membershipCorrection({ matter: brief, link: brief.sessions[1]! }, 'm-notes', 's-2', T1)!);
+  await log.append(undoCorrection({ id: 'a-1', at: T0, kind: 'start', matterId: 'm-notes', sessionId: 's-7', text: '', why: '' }, T1));
+  await log.append(undoCorrection({ id: 'a-2', at: T0, kind: 'group', matterId: 'm-new', sessions: ['s-4', 's-5'], by: 'model', created: true, text: '', why: '' }, T1));
+  assert.deepEqual([...log.takenOut()].sort(), ['s-1>m-brief', 's-2>m-brief', 's-4>m-new', 's-5>m-new', 's-7>m-notes']);
+  const empty = new CorrectionLog(join(directory, 'none'));
+  await empty.open();
+  assert.equal(empty.takenOut().size, 0);
 });

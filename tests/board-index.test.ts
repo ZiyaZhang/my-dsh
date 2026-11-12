@@ -115,7 +115,7 @@ test('the per-turn context is a compact text: matters with their sessions and st
     `指令：改飞书只替换对应的一节，不整篇替换。${'图用插件页的真实样式重截。'.repeat(20)}`.slice(0, 203) + '…',
     '- PR #4321 CI 重跑 id=s-ci 上一轮失败 13:58',
     '事项「每周简报」 id=m-brief 目标：每周五发一期 别名：周报 文档：docs/weekly-01.md、feishu-kb/docs/weekly-04.md 工作区：feishu-kb、deepseek-harness',
-    '- 整理周报 id=s-sort 在等你回答 13:30 my dsh 开的',
+    '- 整理周报 id=s-sort 在等你回答 13:30 派出去的',
     '- 已归档的周报会话 id=s-arch 已归档 10月21日 10:00',
     '- 第一期发布 docs/weekly-01.md id=s-old 空闲 10月20日 10:00',
     '已归档的事项：「第二期」 id=m-done',
@@ -123,6 +123,18 @@ test('the per-turn context is a compact text: matters with their sessions and st
     '不在事项里的会话（最近 14 天）：',
     '- 看一遍我的 PR id=s-free 在跑 07:00 工作区：deepseek-harness',
   ].join('\n'));
+});
+
+test('a hosted matter carries its preset in the index and in the per-turn context; other matters carry none', () => {
+  const data = input();
+  const index = buildBoardIndex({
+    ...data, matters: data.matters.map(matter => matter.id === 'm-brief' ? { ...matter, hosting: { preset: 'workspace-write', at: T0 } } : matter),
+  });
+  assert.deepEqual(index.matters.find(matter => matter.id === 'm-brief')!.hosting, { preset: 'workspace-write' });
+  assert.ok(!('hosting' in index.matters.find(matter => matter.id === 'm-auto')!));
+  const text = indexContext(index, { now: NOW, timeZone: 'Asia/Shanghai' });
+  assert.match(text, /^事项「每周简报」 id=m-brief hosting\.preset=workspace-write 目标：每周五发一期 /m);
+  assert.match(text, /^事项「发布说明」 id=m-auto 目标：/m);
 });
 
 test('a matter with many sessions shows the newest few and says how many more there are', () => {

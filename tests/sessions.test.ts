@@ -34,6 +34,22 @@ test('an approval waits from approval/asked until approval/decided', () => {
   assert.deepEqual(sessionState(asked), { state: 'waiting', wait: 'approval' });
   const decided = fold(asked, event('approval/decided', 2_200, { id: 'a-1', outcome: 'allowed-once' }));
   assert.deepEqual(sessionState(decided), { state: 'running' });
+  assert.equal(decided.refused, undefined);
+});
+
+test('a rejected approval is kept as a refused tool until the next turn starts', () => {
+  const asked = fold(trackStatus(cold(), true), event('turn/start', 2_000, { turn: 1 }),
+    event('approval/asked', 2_100, { id: 'a-1', toolName: 'write', callId: 'c-1' }),
+    event('approval/asked', 2_150, { id: 'a-2', toolName: 'bash', callId: 'c-2' }));
+  const decided = fold(asked,
+    event('approval/decided', 2_200, { id: 'a-1', outcome: 'rejected' }),
+    event('approval/decided', 2_250, { id: 'a-2', outcome: 'allowed-once' }),
+    event('approval/decided', 2_260, { id: 'a-9', outcome: 'rejected' }));
+  assert.deepEqual(decided.refused, ['write']);
+  assert.deepEqual(sessionState(decided), { state: 'running' });
+  const ended = fold(decided, event('turn/end', 2_300, { turn: 1, reason: { kind: 'completed' } }));
+  assert.deepEqual(ended.refused, ['write']);
+  assert.equal(fold(ended, event('turn/start', 3_000, { turn: 2 })).refused, undefined);
 });
 
 test('an ask_user_question call waits until its result; other tool calls do not', () => {

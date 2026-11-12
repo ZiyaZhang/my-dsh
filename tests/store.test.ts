@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { ALIASES_MAX, RequestError, type Matter, type SessionLink } from '../src/host/remote.ts';
 import {
-  addAlias, addSession, archiveMatter, cleanPhrase, createMatter, linkOf, matterOf, mergeMatters, removeSession, renameMatter, setContext, setGoal,
-  unarchiveMatter,
+  addAlias, addSession, archiveMatter, cleanPhrase, conversationOf, createMatter, linkOf, matterOf, mergeMatters, removeSession, renameMatter, setContext,
+  setConversation, setGoal, setHosting, unarchiveMatter,
 } from '../src/host/matters.ts';
 import { MatterStore, migrateMatters } from '../src/host/store.ts';
 
@@ -65,6 +65,44 @@ test('renameMatter keeps the old name as the newest alias; setGoal changes one f
   assert.equal(setGoal(sample(), 'm-brief', '').matter.goal, '');
   refused(() => renameMatter(sample(), 'm-gone', '版本说明'), /没有这个事项/);
   refused(() => setGoal(sample(), 'm-gone', ''), /没有这个事项/);
+});
+
+test('setHosting hosts a matter under a preset with the time it was set, changes it, and stops it with null', () => {
+  const before = sample();
+  const hosted = setHosting(before, 'm-notes', { preset: 'workspace-write', at: T1 });
+  assert.deepEqual(hosted.matter.hosting, { preset: 'workspace-write', at: T1 });
+  assert.deepEqual(hosted.matter.sessions, sample()[1]!.sessions);
+  assert.deepEqual(before, sample());
+  const changed = setHosting(hosted.matters, 'm-notes', { preset: 'read-only', at: T2 });
+  assert.deepEqual(changed.matter.hosting, { preset: 'read-only', at: T2 });
+  const stopped = setHosting(changed.matters, 'm-notes', null);
+  assert.ok(!('hosting' in stopped.matter));
+  assert.deepEqual(stopped.matter, sample()[1]);
+  // Stopping a matter that is not hosted changes nothing.
+  assert.deepEqual(setHosting(sample(), 'm-brief', null).matter, sample()[0]);
+  refused(() => setHosting(sample(), 'm-gone', { preset: 'read-only', at: T1 }), /没有这个事项/);
+});
+
+test('a merge keeps the hosting of the matter that stays, whether or not the merged one was hosted', () => {
+  const both = setHosting(setHosting(sample(), 'm-brief', { preset: 'read-only', at: T1 }).matters, 'm-notes', { preset: 'danger-full-access', at: T2 }).matters;
+  assert.deepEqual(mergeMatters(both, 'm-notes', 'm-brief').matter.hosting, { preset: 'read-only', at: T1 });
+  const onlyMerged = setHosting(sample(), 'm-notes', { preset: 'danger-full-access', at: T2 }).matters;
+  assert.ok(!('hosting' in mergeMatters(onlyMerged, 'm-notes', 'm-brief').matter));
+});
+
+test('a matter records its own conversation, which is not one of its sessions; a merge keeps the conversation of the matter that stays', () => {
+  const talking = setConversation(sample(), 'm-brief', 's-talk');
+  assert.equal(talking.matter.conversation, 's-talk');
+  assert.deepEqual(talking.matter.sessions, sample()[0]!.sessions);
+  assert.equal(conversationOf(talking.matters, 's-talk')?.id, 'm-brief');
+  assert.equal(conversationOf(talking.matters, 's-1'), undefined);
+  assert.equal(matterOf(talking.matters, 's-talk'), undefined);
+  // One that is gone is replaced.
+  assert.equal(setConversation(talking.matters, 'm-brief', 's-again').matter.conversation, 's-again');
+  const both = setConversation(talking.matters, 'm-notes', 's-notes').matters;
+  assert.equal(mergeMatters(both, 'm-notes', 'm-brief').matter.conversation, 's-talk');
+  assert.ok(!('conversation' in mergeMatters(setConversation(sample(), 'm-notes', 's-notes').matters, 'm-notes', 'm-brief').matter));
+  refused(() => setConversation(sample(), 'm-gone', 's-talk'), /没有这个事项/);
 });
 
 test('aliases stay at most ten per matter, newest first, without repeats or the current name', () => {
@@ -192,6 +230,55 @@ test('migrateMatters turns an M1 file into links made by hand at the matter crea
   assert.equal(migrateMatters({ version: 2, matters: [{ ...matters[0], sources: [{ kind: 'video', value: 'x' }] }] }), undefined);
   assert.equal(migrateMatters({ version: 2, matters: [{ ...matters[0], workspaceId: 3 }] }), undefined);
   assert.equal(migrateMatters({ version: 2, matters: [{ ...matters[0], instructions: [] }] }), undefined);
+  assert.equal(migrateMatters({ version: 2, matters: [{ ...matters[0], hosting: 'workspace-write' }] }), undefined);
+  assert.equal(migrateMatters({ version: 2, matters: [{ ...matters[0], hosting: { preset: 'workspace-write' } }] }), undefined);
+  assert.equal(migrateMatters({ version: 2, matters: [{ ...matters[0], conversation: 7 }] }), undefined);
+});
+
+test('the store writes and reads back a matter\'s conversation, and a file without one still opens as version 2', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'my-dsh-'));
+  const plain = { id: 'm-1', name: '每周简报', goal: '', sessions: [link('s-1')], aliases: [], sources: [], createdAt: T0 };
+  await writeFile(join(directory, 'matters.json'), JSON.stringify({ version: 2, matters: [plain] }));
+  const store = new MatterStore(directory);
+  await store.open();
+  assert.deepEqual(store.list(), [plain]);
+  await store.update(matters => setConversation(matters, 'm-1', 's-talk'));
+  const written = JSON.parse(await readFile(join(directory, 'matters.json'), 'utf8')) as { version: number; matters: Record<string, unknown>[] };
+  assert.equal(written.version, 2);
+  assert.equal(written.matters[0]!.conversation, 's-talk');
+  const again = new MatterStore(directory);
+  await again.open();
+  assert.deepEqual(again.list(), [{ ...plain, conversation: 's-talk' }]);
+});
+
+test('a version 2 file reads with or without hosting, and a main field from older files is read past and dropped', () => {
+  const plain = { id: 'm-1', name: '每周简报', goal: '', sessions: [link('s-1')], aliases: [], sources: [], createdAt: T0 };
+  const hosted = { ...plain, id: 'm-2', hosting: { preset: 'workspace-write', at: T1 } };
+  const old = { ...plain, id: 'm-3', main: 's-1' };
+  const read = migrateMatters({ version: 2, matters: [plain, hosted, old] });
+  assert.deepEqual(read, { matters: [plain, hosted, { ...plain, id: 'm-3' }], migrated: false });
+  assert.equal(migrateMatters({ version: 2, matters: [{ ...plain, main: 7 }] }), undefined);
+});
+
+test('the store writes and reads back hosting, and opens a file whose matters carry the old main field', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'my-dsh-'));
+  await writeFile(join(directory, 'matters.json'), JSON.stringify({ version: 2, matters: [
+    { id: 'm-1', name: '每周简报', goal: '', sessions: [link('s-1')], aliases: [], sources: [], createdAt: T0, main: 's-1' },
+  ] }));
+  const store = new MatterStore(directory);
+  await store.open();
+  assert.deepEqual(store.list(), [{ id: 'm-1', name: '每周简报', goal: '', sessions: [link('s-1')], aliases: [], sources: [], createdAt: T0 }]);
+  await store.update(matters => setHosting(matters, 'm-1', { preset: 'workspace-write', at: T1 }));
+  const written = JSON.parse(await readFile(join(directory, 'matters.json'), 'utf8')) as { version: number; matters: Record<string, unknown>[] };
+  assert.equal(written.version, 2);
+  assert.deepEqual(written.matters[0]!.hosting, { preset: 'workspace-write', at: T1 });
+  assert.ok(!('main' in written.matters[0]!));
+  const again = new MatterStore(directory);
+  await again.open();
+  assert.deepEqual(again.list()[0]!.hosting, { preset: 'workspace-write', at: T1 });
+  // Changing a listed copy leaves the store's hosting as it was.
+  again.list()[0]!.hosting!.preset = 'danger-full-access';
+  assert.equal(again.list()[0]!.hosting!.preset, 'workspace-write');
 });
 
 test('an M1 matter file opens migrated, keeps a copy of the old file and is written in the new form on the next change', async () => {
@@ -281,4 +368,14 @@ test('a damaged matter file stops the start instead of being overwritten', async
   await assert.rejects(new MatterStore(directory).open(), /不是能读的事项文件/);
   await writeFile(join(directory, 'matters.json'), '{"version": 1, "matters": [');
   await assert.rejects(new MatterStore(directory).open(), /不是能读的事项文件/);
+});
+
+test('a link made by an origin rule keeps its rule; a rule that is not one makes the file unreadable', () => {
+  const file = (rule: unknown) => ({
+    version: 2,
+    matters: [{ id: 'm-1', name: '看板', goal: '', createdAt: 'T', aliases: [], sources: [], sessions: [{ sessionId: 's-1', by: 'origin', at: 'T', why: '在同一个分支 feat/x 上', rule }] }],
+  });
+  assert.equal(migrateMatters(file('branch'))?.matters[0]!.sessions[0]!.rule, 'branch');
+  assert.equal(migrateMatters(file(undefined))?.matters[0]!.sessions[0]!.rule, undefined);
+  assert.equal(migrateMatters(file('guess')), undefined);
 });
