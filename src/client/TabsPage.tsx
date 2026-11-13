@@ -1,6 +1,6 @@
 /**
- * The `tabs` layout's template, shared by my dsh's page and a matter's: a head (my dsh's banner; a matter's tile, name over one line of
- * numbers, and tools on the right) over the tabs 看板 and 对话, which switch inside the page. 看板 is the conversation's input on top of
+ * The `tabs` layout's template, shared by my dsh's page and a matter's: a head (my dsh's name, numbers and whale; a matter's tile, name
+ * over one line of numbers, and tools on the right) over the tabs 看板 and 对话, which switch inside the page. 看板 is the conversation's input on top of
  * the board; 对话 is the conversation with the board's short form in a column the user resizes or puts away (ChatSplit). A message sent from 看板's input
  * shows 对话, and so does every way into the conversation from elsewhere in my dsh (接着说, 在对话里接着说, 在对话里改, a card's matter).
  * Only the shown tab's composer is mounted: DSH gives a session's draft to one composer, so a second, hidden one would take the Enter.
@@ -11,7 +11,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { IconChevronLeftOutlineRegular, IconFolderCloseRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { BoardMatter, BoardSnapshot } from '../host/remote.js';
-import { WHALE_AT_WORK } from './art.js';
+// The whale at its laptop, from the whale illustrations; the build inlines it as a data URL.
+import whale from './art/whale-work.svg';
 import type { BoardSource } from './board-source.js';
 import { ChatSplit } from './ChatSplit.js';
 import type { OpenDock } from './Dock.js';
@@ -152,15 +153,13 @@ function HomeLine({ stats }: { stats: readonly HomeStat[] }) {
   );
 }
 
-/** my dsh's head: a pale blue banner with the name in serif italic over the sentence of numbers, and the whale at its laptop. */
-function HomeBanner({ stats }: { stats: readonly HomeStat[] }) {
+/** my dsh's head: the name over the sentence of numbers, and the whale at its laptop standing on the head's bottom line at the right. */
+function HomeHead({ stats }: { stats: readonly HomeStat[] }) {
   return (
-    <div className="mydsh-hb">
-      <div className="mydsh-hb-text">
-        <h1>my dsh</h1>
-        <p className="mydsh-hb-line">{stats.length > 0 && <HomeLine stats={stats} />}</p>
-      </div>
-      <img className="mydsh-hb-whale" src={WHALE_AT_WORK} alt="" draggable={false} />
+    <div className="mydsh-hh">
+      <h1>my dsh</h1>
+      <p className="mydsh-hh-line">{stats.length > 0 && <HomeLine stats={stats} />}</p>
+      <img className="mydsh-hh-whale" src={whale} alt="" draggable={false} />
     </div>
   );
 }
@@ -169,7 +168,7 @@ function HomeBanner({ stats }: { stats: readonly HomeStat[] }) {
 const FullBoard = ({ showBoard }: { showBoard: () => void }) => <button type="button" className="mydsh-link is-quiet" onClick={showBoard}>整页看</button>;
 
 /**
- * my dsh's page: the banner with the numbers, then the home board under my dsh's input, and in 对话 my dsh's conversation beside the
+ * my dsh's page: the head with the numbers, then the home board under my dsh's input, and in 对话 my dsh's conversation beside the
  * board's short form. Under the input sit the newest 转给了 card until it is put away, with what the matter's conversation did with the
  * words (its 接着说 opens that conversation), and the card of what needs the user, which takes the place of the board's 待处理.
  */
@@ -202,7 +201,7 @@ export function MyDshTabs({ source, call, dialogs, openSession, openMatter, show
   const forward = snapshot ? newestForward(snapshot) : undefined;
   return (
     <TabsFrame
-      head={<HomeBanner stats={snapshot ? homeStats(snapshot, now) : []} />}
+      head={<HomeHead stats={snapshot ? homeStats(snapshot, now) : []} />}
       label="my dsh"
       // 做事记录 shows once it has an entry.
       tabsEnd={(snapshot?.activity ?? 0) > 0 && <button type="button" className="mydsh-link is-quiet" onClick={showActivity}>做事记录</button>}

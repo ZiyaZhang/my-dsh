@@ -527,26 +527,20 @@ a.mydsh-chip-body:hover .mydsh-chip-label { text-decoration: underline dotted; }
 .mydsh-tb-chat { display: flex; flex: 1 1 0; min-height: 0; }
 .mydsh-hd-stat { display: inline-flex; align-items: baseline; }
 
-/* my dsh's banner: a pale blue band, 116px or taller, with the name in Instrument Serif italic over the sentence of numbers, the numbers
-   in its upright digits, and the whale at its laptop on the band's right, cut by its lower edge. In a band narrower than 720px the whale
-   gives way and the sentence takes the band's width. The band is its own size container, so the head stays out of containment. */
-.mydsh-tb-head:has(> .mydsh-hb) { padding-top: 16px; }
-[data-platform='darwin'] .mydsh-tb-head:has(> .mydsh-hb) { padding-top: calc(16px + var(--dsh-frame-top-clearance, 0px)); }
-.mydsh-tb-head:has(> .mydsh-hb) > .mydsh-tb-row { margin-top: 6px; }
-.mydsh-hb { position: relative; box-sizing: border-box; min-height: 116px; padding: 18px 26px; overflow: hidden; border-radius: 20px; container-type: inline-size; background: linear-gradient(100deg, #F6F7FF 0%, #EEF1FF 55%, #E2E8FF 100%); box-shadow: inset 0 0 0 .5px rgba(77, 107, 254, .16); }
-.mydsh-hb-text { position: relative; z-index: 1; min-width: 0; padding-right: 164px; }
-.mydsh-hb h1 { font-family: 'mydsh-serif', Georgia, serif; font-style: italic; font-weight: 400; font-size: 44px; line-height: 46px; letter-spacing: -.01em; color: #131D8B; }
-.mydsh-hb-line { min-height: 26px; margin-top: 8px; font-size: 13.5px; line-height: 26px; color: var(--dsw-alias-label-secondary); }
-.mydsh-hb-line b { margin: 0 4px 0 5px; font-family: 'mydsh-serif', Georgia, serif; font-weight: 400; font-size: 23px; color: #4D6BFE; }
-.mydsh-hb-whale { position: absolute; right: 22px; bottom: -8px; height: 112px; pointer-events: none; user-select: none; }
-/* The query measures the band's content box: 720px less its 26px sides. */
-@container (max-width: 667px) {
-  .mydsh-hb-whale { display: none; }
-  .mydsh-hb-text { padding-right: 0; }
+/* my dsh's head: the name at 22px over the sentence of numbers, the numbers in DSH's blue, and at the right the whale at its laptop
+   standing on the head's bottom line, beside the end of the tab row, which leaves it room. A head narrower than 660px lets the whale go.
+   Only my dsh's head is a size container, so a matter's head, whose menus open over the board, stays out of containment. */
+.mydsh-tb-head:has(> .mydsh-hh) { position: relative; container-type: inline-size; }
+.mydsh-hh { padding-right: 168px; }
+.mydsh-hh h1 { font-size: 22px; line-height: 30px; font-weight: 600; }
+.mydsh-hh-line { min-height: 22px; margin-top: 4px; font-size: 13.5px; line-height: 22px; color: var(--dsw-alias-label-secondary); }
+.mydsh-hh-line b { margin: 0 3px; font-size: 16px; font-weight: 600; color: var(--dsw-alias-state-business-primary); font-variant-numeric: tabular-nums; }
+.mydsh-tb-head:has(> .mydsh-hh) > .mydsh-tb-row { margin-top: 8px; padding-right: 168px; }
+.mydsh-hh-whale { position: absolute; right: 28px; bottom: 0; height: 92px; pointer-events: none; user-select: none; }
+@container (max-width: 659px) {
+  .mydsh-hh-whale { display: none; }
+  .mydsh-hh, .mydsh-tb-head:has(> .mydsh-hh) > .mydsh-tb-row { padding-right: 0; }
 }
-body[data-ds-dark-theme] .mydsh-hb { background: linear-gradient(100deg, rgba(77, 107, 254, .08) 0%, rgba(77, 107, 254, .14) 55%, rgba(77, 107, 254, .22) 100%); box-shadow: inset 0 0 0 .5px rgba(132, 153, 255, .24); }
-body[data-ds-dark-theme] .mydsh-hb h1 { color: #C9D1FF; }
-body[data-ds-dark-theme] .mydsh-hb-line b { color: #8EA0FF; }
 
 /* 对话: the conversation and its column. The column's left edge is an 8px strip centred on its border that turns DSH's blue while hovered,
    focused or dragged; its head is the column's name with 整页看 and the button that puts it away, which then sits at the conversation's
