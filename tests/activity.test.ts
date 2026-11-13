@@ -89,13 +89,15 @@ test('the log keeps the newest entries when it grows past its bound', () => {
   assert.equal(entries.at(-1)!.id, `a-${ACTIVITY_MAX + 4}`);
 });
 
-test('a start or a send leaves a receipt card under its turn; a start keeps 撤回 while it can be undone', () => {
+test('a start or a send leaves a receipt card under its turn; a start keeps 撤回 while it can be undone; the newest of a session is latest', () => {
   const send = sendEntry({ id: 'a-3', at: T1, sessionId: 's-7', title: '整理周报', why: '', task: '加上 #4321', card: { ...PLACE, turn: 5 } });
   const cards = receiptCards([started(), filed(), send], matters());
   assert.deepEqual(cards, [
-    { type: 'receipt', id: 'a-1', kind: 'start', line: '在「每周简报」开了会话 整理周报', target: 's-7', undoable: true, undone: false, ...PLACE },
-    { type: 'receipt', id: 'a-3', kind: 'send', line: '给会话 整理周报 发了消息', target: 's-7', undoable: false, undone: false, sessionId: 's-mydsh', turn: 5 },
+    { type: 'receipt', id: 'a-1', kind: 'start', line: '在「每周简报」开了会话 整理周报', target: 's-7', latest: false, undoable: true, undone: false, ...PLACE },
+    { type: 'receipt', id: 'a-3', kind: 'send', line: '给会话 整理周报 发了消息', target: 's-7', latest: true, undoable: false, undone: false, sessionId: 's-mydsh', turn: 5 },
   ]);
+  // Alone, the start is the newest receipt of its session.
+  assert.deepEqual(receiptCards([started()], matters()).map(card => card.type === 'receipt' && card.latest), [true]);
   const undone = receiptCards([{ ...started(), undoneAt: T2 }], removeSession(matters(), 's-7').matters);
   assert.deepEqual(undone.map(card => card.type === 'receipt' && [card.undoable, card.undone]), [[false, true]]);
 });
@@ -117,7 +119,7 @@ test('a note entry says what was written where; it has a receipt without 打开,
   assert.equal(canUndo({ ...noted(), undoneAt: T2 }, matters(), new Set(['n-1'])), false);
   assert.equal(canUndo(noted(), matters()), false);
   assert.deepEqual(receiptCards([started(), noted()], matters(), new Set(['n-1']))[1], {
-    type: 'receipt', id: 'a-6', kind: 'note', line: '记进「每周简报」：周报只发到飞书，不发邮件', undoable: true, undone: false, sessionId: 's-mydsh', turn: 6,
+    type: 'receipt', id: 'a-6', kind: 'note', line: '记进「每周简报」：周报只发到飞书，不发邮件', latest: false, undoable: true, undone: false, sessionId: 's-mydsh', turn: 6,
   });
   assert.deepEqual(activityView([started(), noted()], matters(), new Set()).map(entry => [entry.id, entry.undoable]), [['a-6', false], ['a-1', true]]);
 });

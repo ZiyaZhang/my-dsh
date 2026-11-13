@@ -1,9 +1,11 @@
 /**
- * 往回报 (report back): once every session a matter's conversation dispatched has stopped, the Host wakes that conversation once with
- * their results, so it can tell the user. This module keeps a book per dispatcher (a matter's conversation): the sessions it dispatched,
- * one note per watched session whose turn ended since the last wake, the wakes since the user last spoke there, whether waking is
- * paused, and whether a wake's turn is still open. It also decides when to wake and writes the message. Every function is pure; the Host
- * owns the timers, the session events and the delivery. The books live in memory only: after a Host restart nothing is watched.
+ * 往回报 (report back): once every session a hosted matter's conversation dispatched has stopped, the Host wakes that conversation once
+ * with their results, so it can send the next step out. A matter that is not hosted is not woken: the cards under the conversation's turns
+ * show each session as it goes, and the conversation reads its sessions every turn. This module keeps a book per dispatcher (a matter's
+ * conversation): the sessions it dispatched, one note per watched session whose turn ended since the last wake, the wakes since the user
+ * last spoke there, whether waking is paused, and whether a wake's turn is still open. It also decides when to wake and writes the
+ * message. Every function is pure; the Host owns the timers, the session events and the delivery. The books live in memory only: after a
+ * Host restart nothing is watched.
  */
 import type { SessionState, WaitKind } from './remote.js';
 
@@ -111,16 +113,19 @@ export interface WakeStates {
   dispatcher: SessionState | undefined;
   /** DSH archived the dispatcher. */
   archived: boolean;
+  /** The dispatcher's matter is hosted (托管); only a hosted matter's conversation is woken. */
+  hosted: boolean;
   /** Each watched session's state, by id. */
   sessions: ReadonlyMap<string, SessionState | undefined>;
 }
 
 /**
- * Whether to wake the dispatcher now: it has notes, no watched session runs (one that waits for the user does not hold the wake back),
- * the dispatcher itself is idle or failed and not archived, no wake's turn is open, waking is not paused, and the cap is not reached.
+ * Whether to wake the dispatcher now: its matter is hosted, it has notes, no watched session runs (one that waits for the user does not
+ * hold the wake back), the dispatcher itself is idle or failed and not archived, no wake's turn is open, waking is not paused, and the
+ * cap is not reached.
  */
 export function shouldWake(book: Book | undefined, states: WakeStates): boolean {
-  if (!book || book.notes.length === 0 || book.paused || book.waking || book.wakes >= WAKES_MAX || states.archived) return false;
+  if (!book || !states.hosted || book.notes.length === 0 || book.paused || book.waking || book.wakes >= WAKES_MAX || states.archived) return false;
   if (states.dispatcher !== 'idle' && states.dispatcher !== 'failed') return false;
   return !book.watched.some(id => states.sessions.get(id) === 'running');
 }
@@ -163,12 +168,19 @@ function waitingLine(session: WaitingSession): string {
     : `- 「${session.title}」在等用户回答问题（${id}）。`;
 }
 
-/** The wake's message: each note's outcome, the watched sessions still waiting for the user, and what this turn is for. */
+/** What a wake's turn does, as its message says it. */
+export const WAKE_TURN = '这些会话的状态和结果，卡片上已经显示给用户了，不要复述。这件事托管着：用户交代过、还没做完的下一步，直接用 start_session 或 send_to_session 派出去，不用先问；'
+  + '要用户定的事才说话，一两句说清要定什么。都没有就结束这一轮，不输出任何内容：你的回复是空的，没有一个字，也没有标点。要细节用 session_recent 读。';
+
+/**
+ * The wake's message: each note's outcome, the watched sessions still waiting for the user, and what this turn is for. The user already
+ * sees each session's state and result on its card, so the turn sends the next step out and speaks only for what the user has to decide.
+ */
 export function reportText(notes: readonly ReportNote[], waiting: readonly WaitingSession[]): string {
   const lines = ['派出去的会话有结果了：', ...notes.map(noteLine)];
   if (waiting.length) lines.push('还在等用户的：', ...waiting.map(waitingLine));
   const refused = notes.some(note => note.refused?.length) ? '用户拒绝过的操作没有执行，照实说，不要说它做成了。' : '';
-  lines.push(`这一轮只汇报：用一两句告诉用户结果和要用户定的事，不复述原文，要细节用 session_recent 读。${refused}${waiting.length ? '在等用户的会话提一句是哪条就行，用户在“待处理”里能直接处理。' : ''}`);
+  lines.push(`${WAKE_TURN}${refused}${waiting.length ? '在等用户的会话不用提，用户在卡片和“待处理”里能直接处理。' : ''}`);
   return lines.join('\n');
 }
 

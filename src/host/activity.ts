@@ -190,11 +190,15 @@ export function activityView(entries: readonly ActivityEntry[], matters: readonl
 
 /**
  * The receipts under my dsh's turns, in the order they were made; `notes` as in {@link canUndo}. Of the passes to one matter, only the
- * newest is `latest`.
+ * newest is `latest`, and so of the sessions started or written to, only the newest receipt of each session.
  */
 export function receiptCards(entries: readonly ActivityEntry[], matters: readonly Matter[], notes: ReadonlySet<string> = new Set()): CardView[] {
   const newest = new Map<string, string>();
-  for (const entry of entries) if (entry.kind === 'forward' && entry.matterId) newest.set(entry.matterId, entry.id);
+  const newestOfSession = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry.kind === 'forward' && entry.matterId) newest.set(entry.matterId, entry.id);
+    if ((entry.kind === 'start' || entry.kind === 'send') && entry.sessionId) newestOfSession.set(entry.sessionId, entry.id);
+  }
   return entries.flatMap((entry): CardView[] => {
     if (!entry.card) return [];
     if (entry.kind === 'forward') {
@@ -205,9 +209,11 @@ export function receiptCards(entries: readonly ActivityEntry[], matters: readonl
       }];
     }
     const state = { undoable: canUndo(entry, matters, notes), undone: entry.undoneAt !== undefined, ...entry.card };
-    if (entry.kind === 'note') return [{ type: 'receipt', id: entry.id, kind: 'note', line: entry.text, ...state }];
+    if (entry.kind === 'note') return [{ type: 'receipt', id: entry.id, kind: 'note', line: entry.text, latest: false, ...state }];
     if (!entry.sessionId || (entry.kind !== 'start' && entry.kind !== 'send')) return [];
-    return [{ type: 'receipt', id: entry.id, kind: entry.kind, line: entry.text, target: entry.sessionId, ...state }];
+    return [{
+      type: 'receipt', id: entry.id, kind: entry.kind, line: entry.text, target: entry.sessionId, latest: newestOfSession.get(entry.sessionId) === entry.id, ...state,
+    }];
   });
 }
 

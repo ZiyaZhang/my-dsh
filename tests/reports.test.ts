@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  REPLY_CHARS, WAKES_MAX, forgetDispatcher, forgetSession, noteTurnEnd, reportSummary, reportText, shouldWake, turnEndKind, userTurn, wakeSent,
+  REPLY_CHARS, WAKES_MAX, WAKE_TURN, forgetDispatcher, forgetSession, noteTurnEnd, reportSummary, reportText, shouldWake, turnEndKind, userTurn, wakeSent,
   wakeTurnEnded, watch, watchersOf, type Book, type Books, type ReportNote, type WakeStates,
 } from '../src/host/reports.ts';
 import type { SessionState } from '../src/host/remote.ts';
@@ -10,8 +10,8 @@ const done = (sessionId: string, text = '报告写好了'): ReportNote => ({ ses
 /** The dispatcher `s-talk` watching `s-1` and `s-2`. */
 const books = (): Books => watch(watch(new Map(), 's-talk', 's-1'), 's-talk', 's-2');
 const book = (all: Books): Book => all.get('s-talk')!;
-const states = (dispatcher: SessionState | undefined, sessions: Record<string, SessionState> = {}, archived = false): WakeStates =>
-  ({ dispatcher, archived, sessions: new Map(Object.entries(sessions)) });
+const states = (dispatcher: SessionState | undefined, sessions: Record<string, SessionState> = {}, archived = false, hosted = true): WakeStates =>
+  ({ dispatcher, archived, hosted, sessions: new Map(Object.entries(sessions)) });
 
 test('a session the conversation dispatched is watched once; a note comes only from a watched session, and a newer one replaces the older', () => {
   const start = books();
@@ -42,6 +42,15 @@ test('no wake while a watched session runs, or while the dispatcher runs or wait
   assert.equal(shouldWake(undefined, states('idle')), false);
   // A wake whose turn has not ended yet holds the next one back.
   assert.equal(shouldWake(book(noteTurnEnd(wakeSent(noted, 's-talk'), done('s-2'))), states('idle')), false);
+});
+
+test('a matter that is not hosted is never woken: its cards show the sessions, and its conversation reads them on the user\'s next turn', () => {
+  const all = noteTurnEnd(noteTurnEnd(books(), done('s-1')), done('s-2'));
+  assert.equal(shouldWake(book(all), states('idle', {}, false, false)), false);
+  assert.equal(shouldWake(book(all), states('failed', {}, false, false)), false);
+  // The notes stay: hosted later, the first wake carries them.
+  assert.equal(book(all).notes.length, 2);
+  assert.equal(shouldWake(book(all), states('idle')), true);
 });
 
 test('a wake delivers the notes and counts; ten in a row without the user is the cap, and a user turn starts the count again', () => {
@@ -116,13 +125,13 @@ test('the message says how each turn ended, with the start of a finished reply a
     '还在等用户的：',
     '- 「定开关」在等用户回答问题（id=s-7）。',
     '- 「删目录」在等用户批准bash（id=s-8）。',
-    '这一轮只汇报：用一两句告诉用户结果和要用户定的事，不复述原文，要细节用 session_recent 读。在等用户的会话提一句是哪条就行，用户在“待处理”里能直接处理。',
+    `${WAKE_TURN}在等用户的会话不用提，用户在卡片和“待处理”里能直接处理。`,
   ].join('\n'));
   // Without waiting sessions the block and its sentence are left out.
   assert.equal(reportText([notes[2]!], []), [
     '派出去的会话有结果了：',
     '- 「装插件」被停下了（id=s-3）。',
-    '这一轮只汇报：用一两句告诉用户结果和要用户定的事，不复述原文，要细节用 session_recent 读。',
+    WAKE_TURN,
   ].join('\n'));
   for (const outcome of ['interrupted', 'blocked', 'forked']) {
     assert.match(reportText([{ sessionId: 's-9', title: 'x', outcome }], []), new RegExp(`- 「x」停下了（id=s-9，${outcome}）。`));
@@ -139,7 +148,7 @@ test('what the user rejected goes into the note and the instruction, whatever th
     '派出去的会话有结果了：',
     '- 「写文件」做完了（id=s-1）。用户拒绝了write，这些操作没有执行。最后的回复：完成',
     '- 「跑脚本」出错了（id=s-2）：退出码 1。用户拒绝了bash，这些操作没有执行。',
-    '这一轮只汇报：用一两句告诉用户结果和要用户定的事，不复述原文，要细节用 session_recent 读。用户拒绝过的操作没有执行，照实说，不要说它做成了。',
+    `${WAKE_TURN}用户拒绝过的操作没有执行，照实说，不要说它做成了。`,
   ].join('\n'));
 });
 

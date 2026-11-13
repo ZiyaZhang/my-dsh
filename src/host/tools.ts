@@ -63,7 +63,7 @@ export function coordinationTools(mydsh: MyDsh) {
     }),
     defineTool({
       name: 'send_to_session',
-      description: '给一条已有的会话发一条消息，它会接着做。这条会话正被另一个 DSH 进程打开（比如桌面端）时会失败。',
+      description: '给一条已有的会话发一条消息：它正在跑时，下一步就读到；空闲时会接着做。这条会话正被另一个 DSH 进程打开（比如桌面端）时会失败。',
       parameters: {
         sessionId: SESSION_ID,
         text: { type: 'string', required: true, description: '发给这条会话的话。' },

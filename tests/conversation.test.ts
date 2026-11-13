@@ -37,10 +37,11 @@ test('a matter\'s conversation reads its rules, the matter\'s context, its memor
     '- 出 0.163 的报告 · 空闲，最后的回复：报告写好了 · 派出去的 · id=s-report',
   ].join('\n'));
   assert.match(text, /^这条会话是事项「SDK 升级跟进」的对话。用户在这里交代和这件事有关的事。\n- 用户的话里没说要做什么、问什么，先问清楚，不要自己找活干。\n- 小事直接做。/);
-  // Right after the line about dispatching: what comes back once the dispatched sessions stop.
+  // Right after the line about dispatching: the cards that show the dispatched sessions, then what a hosted matter's wake brings.
   const rules = conversationRules('SDK 升级跟进').split('\n');
-  assert.equal(rules[rules.findIndex(rule => rule.startsWith('- 派出去以后')) + 1],
-    '- 你派出去的会话都停下后，会收到一条“派出去的会话有结果了”。那一轮只汇报，不开新会话，不发消息。');
+  const dispatched = rules.findIndex(rule => rule.startsWith('- 派出去以后'));
+  assert.match(rules[dispatched + 1]!, /^- 你派出去的每条会话，在派它的那一轮下面有一张卡片，一直显示它在做的这一步、结果开头、报错或它问用户的话，用户看得到。所以你不复述结果，也不提卡片/);
+  assert.match(rules[dispatched + 2]!, /^- 这件事托管时，你派出去的会话都停下后会收到一条“派出去的会话有结果了”，照那条消息做。没托管时不会收到/);
   // The sessions' own matter line is left out: the rules already say which matter this is.
   assert.doesNotMatch(text, /这条会话属于事项/);
 });
@@ -108,7 +109,7 @@ test('a hosted matter\'s conversation reads which preset its sessions run under,
   assert.equal(hostingLine('team-review'), `这件事托管了：你开的会话按权限预设 team-review 跑。${tail}`);
   const lines = conversationContext(matter, sessions, 'read-only', MEMORY).split('\n');
   assert.equal(lines[lines.indexOf('来源：releases（https://example.com/r）') + 1], hostingLine('read-only'));
-  assert.ok(!conversationContext(matter, sessions).includes('托管'));
+  assert.ok(!conversationContext(matter, sessions).includes('这件事托管了'));
 });
 
 test('the conversation writes the user\'s standing words into the matter\'s memory, and changes a memory file when the user asks', () => {

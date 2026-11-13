@@ -185,6 +185,18 @@ button.mydsh-crumb:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .mydsh-card-links .mydsh-link { font-size: 13px; line-height: 20px; }
 .mydsh-card-stat { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); }
 .mydsh-card-error { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-state-error-primary); }
+/* A session the turn dispatched, as it goes: dot, title and links on one row, the board's line for it under the title. Cards of this kind
+   next to each other share one bordered list, a hairline between them. */
+.mydsh-sc-list { display: flex; flex-direction: column; overflow: hidden; border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-layer-1); }
+.mydsh-card-item.is-session { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; row-gap: 0; padding: 10px 14px; }
+.mydsh-sc-list > .is-session + .is-session { border-top: .5px solid var(--dsw-alias-border-l2); }
+.mydsh-sc-dot { display: inline-grid; place-items: center; width: 16px; height: 22px; }
+.mydsh-sc-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mydsh-sc-title b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.mydsh-sc-matter { flex: none; font-size: 12.5px; color: var(--dsw-alias-label-tertiary); }
+.mydsh-sc-line { grid-column: 2 / 4; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.mydsh-card-item.is-session > .mydsh-card-error { grid-column: 2 / 4; }
+.mydsh-card-links .mydsh-link.is-due { font-weight: 500; color: var(--dsw-alias-state-warn-label); }
 /* 转给了「X」: under a turn of my dsh's conversation, a receipt with the start of the matter conversation's reply; under my dsh's
    input, the reply card's box with the whole reply. */
 .mydsh-fw { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

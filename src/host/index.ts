@@ -138,6 +138,11 @@ const CARDS_MAX = 300;
 const RECENT_MESSAGES = 16;
 /** Ends every task `start_session` sends, so what the user must decide reaches 等你处理 rather than staying in a reply. */
 const ASK_USER_LINE = '需要用户决定或确认时，用提问工具问，不要只写在回复里。';
+/**
+ * Ends every task `start_session` sends and every message `send_to_session` sends: the card under the dispatching turn shows how the
+ * session's last reply starts, and a hosted matter's conversation reads it when it is woken, so the reply leads with the result.
+ */
+const RESULT_LINE = '做完时，最后一条回复先用一两句写清结果：做了什么、结果在哪、还差什么，不看上文也能懂。';
 /** How many messages of my dsh's history a pass to a matter reads back to find the user's last few. */
 const FORWARD_SCAN = 24;
 /** How often the Host checks which matters' memory is due its daily merge. */
@@ -525,7 +530,7 @@ export default class MyDsh extends TypertRemoteService {
     const at = new Date().toISOString();
     const joined = await this.store.update(matters => addSession(matters, matter.id, { sessionId, by: 'mydsh', at, why }));
     if (scope.kind === 'conversation') this.books = watch(this.books, scope.sessionId, sessionId);
-    const sent = sentText(task, this.turns.get(session.id)?.prompt, ASK_USER_LINE);
+    const sent = sentText(task, this.turns.get(session.id)?.prompt, `${ASK_USER_LINE}\n${RESULT_LINE}`);
     live.agent.followup(createUserMessage({ content: [{ type: 'text', text: sent }], source: { kind: 'my-dsh' } }));
 
     const id = randomUUID();
@@ -536,8 +541,9 @@ export default class MyDsh extends TypertRemoteService {
   }
 
   /**
-   * Send a follow-up with the user's words of the turn into an existing session and leave a receipt. A matter's conversation sends to its
-   * matter's sessions only, and watches the one it sent to for 往回报.
+   * Send the user's words of the turn into an existing session as steering, so a running session reads them at its next step and an idle
+   * one starts a turn, and leave a receipt. A matter's conversation sends to its matter's sessions only, and watches the one it sent to
+   * for 往回报.
    */
   async sendToSession(args: { sessionId: string; text: string; why: string }, caller: ToolCaller) {
     const { session, scope } = this.callerSession(caller, true);
@@ -556,7 +562,7 @@ export default class MyDsh extends TypertRemoteService {
       }
       throw live.error;
     }
-    live.agent.followup(createUserMessage({ content: [{ type: 'text', text: sentText(text, this.turns.get(session.id)?.prompt) }], source: { kind: 'my-dsh' } }));
+    live.agent.steer(createUserMessage({ content: [{ type: 'text', text: sentText(text, this.turns.get(session.id)?.prompt, RESULT_LINE) }], source: { kind: 'my-dsh' } }));
     if (scope.kind === 'conversation') this.books = watch(this.books, scope.sessionId, args.sessionId);
 
     const at = new Date().toISOString();
@@ -882,12 +888,14 @@ export default class MyDsh extends TypertRemoteService {
     this.books = wakeSent(this.books, dispatcher);
   }
 
-  /** The states the wake decision reads: the dispatcher's, whether DSH archived it, and each watched session's. */
+  /** The states the wake decision reads: the dispatcher's, whether DSH archived it, whether its matter is hosted, and each watched session's. */
   private wakeStates(dispatcher: string): WakeStates {
     const watched = this.books.get(dispatcher)?.watched ?? [];
+    const matter = conversationOf(this.store.list(), dispatcher);
     return {
       dispatcher: this.sessions.view(dispatcher)?.state,
       archived: this.ctx.workspaceRegistry.archivedSessionIds.includes(dispatcher as SessionId),
+      hosted: matter !== undefined && !matter.archivedAt && matter.hosting !== undefined,
       sessions: new Map(watched.map(id => [id, this.sessions.view(id)?.state])),
     };
   }

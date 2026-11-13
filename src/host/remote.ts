@@ -399,9 +399,10 @@ export type CardView =
   | (CardPlace & { type: 'which'; id: string; phrase: string; candidates: WhichCandidate[]; state: WhichQuestion['state']; answer?: WhichCandidate | null })
   /**
    * The receipt my dsh leaves under the turn that started a session, sent it a message or wrote a note; `id` is the activity entry and
-   * `target` the session 打开 opens, which a note has none of.
+   * `target` the session 打开 opens, which a note has none of. `latest` marks the newest receipt of its target, the one card that shows
+   * the session as it goes; a note is never `latest`.
    */
-  | (CardPlace & { type: 'receipt'; id: string; kind: 'start' | 'send' | 'note'; line: string; target?: string; undoable: boolean; undone: boolean })
+  | (CardPlace & { type: 'receipt'; id: string; kind: 'start' | 'send' | 'note'; line: string; target?: string; latest: boolean; undoable: boolean; undone: boolean })
   | ForwardCardView;
 
 /**

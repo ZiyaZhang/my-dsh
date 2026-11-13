@@ -22,6 +22,35 @@ export function dayOpen(day: { day: string }, index: number, toggled: Readonly<R
   return toggled[day.day] ?? index === 0;
 }
 
+/** A session as the card under the turn that dispatched it shows it, with the matter it is in; undefined when the board does not list it. */
+export function cardSession(snapshot: BoardSnapshot, sessionId: string): { session: BoardSession; matter?: { id: string; name: string } } | undefined {
+  for (const matter of snapshot.matters) {
+    const session = matter.sessions.find(candidate => candidate.id === sessionId);
+    if (session) return { session, matter: { id: matter.id, name: matter.name } };
+  }
+  const loose = snapshot.unassigned.find(candidate => candidate.id === sessionId);
+  return loose ? { session: loose } : undefined;
+}
+
+/** The dot a session's card shows (DSH's StateDot states): an idle session whose last turn left a reply is done. */
+export function sessionDot(session: BoardSession): 'done' | 'warning' | 'ongoing' | 'error' | 'idle' {
+  if (session.state === 'running') return 'ongoing';
+  if (session.state === 'waiting') return 'warning';
+  if (session.state === 'failed') return 'error';
+  return session.preview?.kind === 'reply' ? 'done' : 'idle';
+}
+
+/** A turn's cards in runs: next to each other, the cards that follow a session share one list; every other card stands alone. */
+export function cardRuns<T>(cards: readonly T[], follows: (card: T) => boolean): { follows: boolean; cards: T[] }[] {
+  const runs: { follows: boolean; cards: T[] }[] = [];
+  for (const card of cards) {
+    const last = runs.at(-1);
+    if (follows(card) && last?.follows) last.cards.push(card);
+    else runs.push({ follows: follows(card), cards: [card] });
+  }
+  return runs;
+}
+
 /** The sessions a matter's conversation, or my dsh, dispatched: those its tools put in the matter. */
 export function dispatchedSessions(matters: readonly BoardMatter[]): Set<string> {
   return new Set(matters.flatMap(matter => matter.sessions.filter(session => session.by === 'mydsh').map(session => session.id)));

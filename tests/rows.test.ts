@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { BoardMatter, BoardSession, BoardSnapshot, ConversationView, MemoryView, ReviewSession, SuggestionView } from '../src/host/remote.ts';
 import {
-  HOME_CARD_SHOWN, IDLE_SHOWN, columnCounts, contextSummary, dayOpen, dispatchedSessions, daysUsed, foldHomeCard, foldIdle, followRows, forwardState, homeCardRows,
-  homeStats, tokenText, lineOf, matterCounts, sessionArea, suggestionTitle, waitingRows,
+  HOME_CARD_SHOWN, IDLE_SHOWN, cardRuns, cardSession, columnCounts, contextSummary, dayOpen, dispatchedSessions, daysUsed, foldHomeCard, foldIdle, followRows, forwardState, homeCardRows,
+  homeStats, tokenText, lineOf, matterCounts, sessionArea, sessionDot, suggestionTitle, waitingRows,
 } from '../src/client/rows.ts';
 
 const NOW = Date.parse('2026-11-09T06:00:00Z');
@@ -244,4 +244,29 @@ test('the card puts the suggestions of automatic grouping after what needs the u
   assert.deepEqual([folded.shown.map(row => row.id), folded.rest.map(row => row.id)], [['q-1', 'f-1', 'g-1'], ['g-2']]);
   assert.deepEqual(foldHomeCard(rows.slice(0, HOME_CARD_SHOWN)).rest, []);
   assert.deepEqual(homeCardRows([], suggestions.slice(1)).map(row => row.id), ['g-2']);
+});
+
+test('a dispatched session\'s card finds it in its matter, else among the loose sessions, and shows a finished reply as done', () => {
+  const running = session('s-run', { state: 'running', preview: { kind: 'running', step: '编辑 a.ts', since: NOW - 3 * MINUTE } });
+  const snapshot = {
+    matters: [matter('m-1', 'SDK 升级跟进', [running, session('s-done', { preview: { kind: 'reply', text: '做好了插件' } })])],
+    unassigned: [session('s-out')],
+  } as unknown as BoardSnapshot;
+  assert.deepEqual(cardSession(snapshot, 's-run'), { session: running, matter: { id: 'm-1', name: 'SDK 升级跟进' } });
+  assert.deepEqual(cardSession(snapshot, 's-out'), { session: session('s-out') });
+  assert.equal(cardSession(snapshot, 's-gone'), undefined);
+  assert.equal(lineOf(running, NOW), '正在：编辑 a.ts · 3 分钟');
+  assert.deepEqual(
+    [running, session('s-done', { preview: { kind: 'reply', text: '做好了' } }), session('s-idle'), session('s-ask', { state: 'waiting', wait: 'question' }), session('s-bad', { state: 'failed' })].map(sessionDot),
+    ['ongoing', 'done', 'idle', 'warning', 'error'],
+  );
+});
+
+test('the cards that follow a session share one list while they are next to each other; any other card stands alone', () => {
+  const runs = cardRuns(['s1', 's2', 'note', 's3', 'proposal', 'proposal2', 's4'], card => card.startsWith('s'));
+  assert.deepEqual(runs, [
+    { follows: true, cards: ['s1', 's2'] }, { follows: false, cards: ['note'] }, { follows: true, cards: ['s3'] },
+    { follows: false, cards: ['proposal'] }, { follows: false, cards: ['proposal2'] }, { follows: true, cards: ['s4'] },
+  ]);
+  assert.deepEqual(cardRuns([], () => true), []);
 });

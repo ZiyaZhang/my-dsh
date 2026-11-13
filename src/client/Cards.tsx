@@ -1,11 +1,13 @@
 /**
  * The cards under my dsh's turns and those of a matter's conversation, drawn through `conversation.chat.turnTail`: a proposal with its
  * buttons, a candidate question, a receipt for a session the tools started or wrote to, or for a line they wrote into a matter's notes,
- * and 转给了「X」 for the user's words my dsh passed to a matter's conversation. The cards' state comes from the Host with the board
- * snapshot; each card sits under the turn whose tool call made it. Other sessions render nothing.
+ * and 转给了「X」 for the user's words my dsh passed to a matter's conversation. The newest receipt of a session follows it: the
+ * session's dot, title and the line the board shows under it (the step it is on, what it asks, the error, how its reply starts), kept
+ * current with each snapshot; such cards next to each other share one list. The cards' state comes from the Host with the board snapshot;
+ * each card sits under the turn whose tool call made it. Other sessions render nothing.
  */
-import { useState, useSyncExternalStore } from 'react';
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-agent-preset-registry';
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
@@ -13,6 +15,15 @@ import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import { PRESET_ID, type BoardSnapshot, type CardView } from '../host/remote.js';
 import type { BoardSource } from './board-source.js';
 import { ForwardCard } from './Forward.js';
+import { cardRuns, cardSession, lineOf, sessionDot } from './rows.js';
+
+type ReceiptCard = Extract<CardView, { type: 'receipt' }>;
+
+/** The session a receipt follows: its newest start or send, not taken back, of a session the board lists. */
+function followed(card: CardView, snapshot: BoardSnapshot): ReturnType<typeof cardSession> {
+  if (card.type !== 'receipt' || card.kind === 'note' || !card.latest || card.undone || card.target === undefined) return undefined;
+  return cardSession(snapshot, card.target);
+}
 
 export interface CardActions {
   accept(id: string): Promise<void>;
@@ -47,14 +58,23 @@ export function CardTail({ turn, sessionId, useProjection, source, actions }: Pr
 function TurnCards({ sessionId, turn, source, actions }: { sessionId: string; turn: number } & CardsInjected) {
   const state = useSyncExternalStore(source.subscribe, source.getSnapshot);
   if (state.status !== 'ready') return null;
-  const cards = state.snapshot.assistant.cards.filter(card => card.sessionId === sessionId && card.turn === turn);
+  const { snapshot } = state;
+  const cards = snapshot.assistant.cards.filter(card => card.sessionId === sessionId && card.turn === turn);
   if (cards.length === 0) return null;
-  return <div className="mydsh-cards">{cards.map(card => <Card key={card.id} card={card} snapshot={state.snapshot} actions={actions} />)}</div>;
+  const draw = (card: CardView) => <Card key={card.id} card={card} snapshot={snapshot} own={sessionId === snapshot.assistant.sessionId} actions={actions} />;
+  return (
+    <div className="mydsh-cards">
+      {cardRuns(cards, card => followed(card, snapshot) !== undefined).map(run => (run.follows
+        ? <div key={run.cards[0]!.id} className="mydsh-sc-list">{run.cards.map(draw)}</div>
+        : run.cards.map(draw)))}
+    </div>
+  );
 }
 
 const VERBS = { new: ['新起', '已新起'], merge: ['合并', '已合并'], rename: ['改名', '已改名'] } as const;
 
-function Card({ card, snapshot, actions }: { card: CardView; snapshot: BoardSnapshot; actions: CardActions }) {
+/** `own`: the card sits under my dsh's own turns, where a session's card names its matter. */
+function Card({ card, snapshot, own, actions }: { card: CardView; snapshot: BoardSnapshot; own: boolean; actions: CardActions }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = (task: () => Promise<void>) => {
@@ -111,6 +131,14 @@ function Card({ card, snapshot, actions }: { card: CardView; snapshot: BoardSnap
     );
   }
 
+  const session = followed(card, snapshot);
+  if (session) {
+    return (
+      <SessionCard card={card} session={session} own={own} busy={busy} failure={failure}
+        open={() => { actions.openSession(session.session.id); }} undo={() => { run(() => actions.undo(card.id)); }} />
+    );
+  }
+
   const target = card.target;
   return (
     <section className="mydsh-card-item is-receipt" data-card={card.id}>
@@ -120,6 +148,29 @@ function Card({ card, snapshot, actions }: { card: CardView; snapshot: BoardSnap
         {card.undoable && <button type="button" className="mydsh-link" disabled={busy} onClick={() => { run(() => actions.undo(card.id)); }}>撤回</button>}
         {card.undone && <span className="mydsh-card-stat">已撤回</span>}
       </span>
+      {failure}
+    </section>
+  );
+}
+
+/**
+ * A session the turn started or wrote to, as it goes: its dot, its title (and its matter under my dsh's own turns), and the line the board
+ * shows under it. One that waits for the user offers 去回答 or 去批准 instead of 打开; 撤回 stays while the receipt can be taken back.
+ */
+function SessionCard({ card, session: { session, matter }, own, busy, failure, open, undo }: {
+  card: ReceiptCard; session: NonNullable<ReturnType<typeof cardSession>>; own: boolean; busy: boolean; failure: ReactNode; open: () => void; undo: () => void;
+}) {
+  const line = lineOf(session, Date.now());
+  const due = session.state === 'waiting' ? (session.wait === 'approval' ? '去批准' : '去回答') : undefined;
+  return (
+    <section className="mydsh-card-item is-session" data-card={card.id} data-state={session.state}>
+      <span className="mydsh-sc-dot"><StateDot state={sessionDot(session)} /></span>
+      <p className="mydsh-sc-title"><b>{session.title}</b>{own && matter && <span className="mydsh-sc-matter">{matter.name}</span>}</p>
+      <span className="mydsh-card-links">
+        <button type="button" className={`mydsh-link${due ? ' is-due' : ''}`} onClick={open}>{due ?? '打开'}</button>
+        {card.undoable && <button type="button" className="mydsh-link" disabled={busy} onClick={undo}>撤回</button>}
+      </span>
+      {line && <p className="mydsh-sc-line">{line}</p>}
       {failure}
     </section>
   );

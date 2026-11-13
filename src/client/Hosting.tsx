@@ -1,6 +1,7 @@
 /**
  * 托管 in a matter's head: a chip like DSH's permission chip in the composer, 托管：<preset> or 托管：不托管, opening a menu of 不托管 and
- * the presets DSH offers, each with what the sessions my dsh opens in the matter may then do. 完全权限 asks first, in DSH's own words.
+ * the presets DSH offers, each with what the sessions my dsh opens in the matter may then do. 完全权限 asks first, in DSH's dialog, saying
+ * what it means here: the sessions the matter's conversation dispatches run without asking, and it keeps dispatching while hosted.
  */
 import { useState, type ReactNode } from 'react';
 import {
@@ -90,7 +91,7 @@ export function HostingChip({ preset, presets, setHosting }: {
         <RiskConfirmation
           open
           title="确认启用完全权限？"
-          description="启用完全权限后，新会话将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任后续任务时使用。"
+          description="启用完全权限后，这件事项的对话派出去的会话会按完全权限跑：改文件、跑外部命令和其他敏感操作都不再先问你。托管时，派出去的会话做完后它还会接着派下一步。只在你信任这件事接下来的活时启用。"
           acknowledgeLabel="我已了解风险，并愿意继续"
           cancelLabel="取消"
           closeLabel="关闭"
