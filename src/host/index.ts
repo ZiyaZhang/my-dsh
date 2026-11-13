@@ -86,6 +86,7 @@ import {
   WAKE_DELAY_MS, forgetDispatcher, forgetSession, noteTurnEnd, reportSummary, reportText, shouldWake, turnEndKind, userTurn, wakeSent,
   wakeTurnEnded, watch, watchersOf, type Books, type ReportNote, type WaitingSession, type WakeStates,
 } from './reports.js';
+import { CUT_TWICE, callStop, type StreamFinish } from './model-call.js';
 import { FORWARD_MESSAGES_MAX, onlyNames, recentReplies, trackTurn, userWords, type TurnState } from './session-text.js';
 import { SessionIndex, lastReply, sessionView, type SessionRow, type SessionView } from './sessions.js';
 import { REVIEW_DAYS, buildSnapshot, conversationParts, dayKey, displayTitle, hostingPresets, type ScheduleEntry, type WorkspaceFacts } from './snapshot.js';
@@ -154,6 +155,8 @@ const HISTORY_PAGES = 10;
 const PAGE_MESSAGES = 200;
 /** How long one 补记 or merge may take, model call included, before it is given up; a run of 自动归类 gets as long. */
 const PASS_TIMEOUT_MS = 10 * 60 * 1000;
+/** How often reading the board may check whether 自动归类 is due. */
+const BOARD_CHECK_MS = 60 * 1000;
 /** 自动归类: session logs one run reads at most (the newest loose sessions), and working directories whose git it reads. */
 const GROUPING_LOGS = 60;
 const GROUPING_DIRS = 120;
@@ -252,7 +255,8 @@ export default class MyDsh extends TypertRemoteService {
   /** 自动归类: runs, suggestions and evidence (grouping.json); the run in progress; whether the board was read since the Host started. */
   private readonly grouping: GroupingStore;
   private groupingRun: Promise<void> | undefined;
-  private boardRead = false;
+  /** When a board read last checked whether 自动归类 is due. */
+  private boardChecked = 0;
 
   constructor(ctx: Context, public config: Config = {}) {
     super(ctx, 'mydsh');
@@ -1144,10 +1148,11 @@ export default class MyDsh extends TypertRemoteService {
 
   // ── 自动归类 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** The board was read: the first read after the Host started checks whether a run is due. */
+  /** The board was read: check whether a run of 自动归类 is due, at most once a minute, so opening my dsh is enough to start one. */
   private boardOpened(): void {
-    if (this.boardRead) return;
-    this.boardRead = true;
+    const now = Date.now();
+    if (now - this.boardChecked < BOARD_CHECK_MS) return;
+    this.boardChecked = now;
     this.groupingCheck();
   }
 
@@ -1718,25 +1723,39 @@ export default class MyDsh extends TypertRemoteService {
   }
 
   /**
-   * Ask the user's default model through DSH's model service and read its answer; one more try when `read` finds nothing it can use.
+   * Ask the user's default model through DSH's model service and read its answer; one more try when `read` finds nothing it can use in
+   * an answer that ended. DSH ends a failed or stopped call's stream with the reason instead of throwing, so the reason is read here.
    * @returns what `read` made of the answer, or undefined after two answers it could not use.
+   * @throws RequestError when the pass ran out of time, a call failed or was stopped, or both answers were cut at the length limit.
    */
   private async askModelFor<T>(system: string, prompt: string, signal: AbortSignal, read: (answer: string) => T | undefined, purpose: string): Promise<T | undefined> {
     const llm = this.llm;
     const model = this.defaultModel;
     if (!llm || !model) throw new RequestError('模型服务还没加载好，稍后再试');
     const selection = model.currentSelection();
+    const timedOut = () => signal.aborted && (signal.reason as { name?: unknown } | undefined)?.name === 'TimeoutError';
+    let finish: StreamFinish | undefined;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let answer = '';
-      for await (const chunk of llm.stream({
-        ...selection, system, purpose, signal,
-        messages: [{ role: 'user', content: [{ type: 'text', text: attempt === 0 ? prompt : `${prompt}\n\n上一次的回答不是能解析的 JSON，只输出那个 JSON 对象。` }] }],
-      })) {
-        if (chunk.type === 'text-delta' && typeof chunk.text === 'string') answer += chunk.text;
+      finish = undefined;
+      try {
+        for await (const chunk of llm.stream({
+          ...selection, system, purpose, signal,
+          messages: [{ role: 'user', content: [{ type: 'text', text: attempt === 0 ? prompt : `${prompt}\n\n上一次的回答不是能解析的 JSON，只输出那个 JSON 对象。` }] }],
+        })) {
+          if (chunk.type === 'text-delta' && typeof chunk.text === 'string') answer += chunk.text;
+          else if (chunk.type === 'finish' && chunk.reason) finish = chunk.reason;
+        }
+      } catch (failure) {
+        if (!timedOut()) throw failure;
       }
+      if (signal.aborted && !timedOut()) signal.throwIfAborted();
+      const stop = callStop(finish, timedOut(), PASS_TIMEOUT_MS / 60_000);
+      if (stop) throw new RequestError(stop);
       const value = read(answer);
       if (value !== undefined) return value;
     }
+    if (finish?.kind === 'max-tokens') throw new RequestError(CUT_TWICE);
     return undefined;
   }
 
@@ -2090,7 +2109,7 @@ interface LlmLike {
   stream(options: {
     provider: string; model: string; reasoningEffort?: string; system?: string; purpose?: string; signal?: AbortSignal;
     messages: { role: 'user'; content: { type: 'text'; text: string }[] }[];
-  }): AsyncIterable<{ type: string; text?: string }>;
+  }): AsyncIterable<{ type: string; text?: string; reason?: StreamFinish }>;
 }
 interface DefaultModelLike { currentSelection(): { provider: string; model: string; reasoningEffort?: string } }
 /** The parts of DSH's permission preset service (`dsh-permission-presets`) the plugin uses. `set` throws for a name it does not offer. */

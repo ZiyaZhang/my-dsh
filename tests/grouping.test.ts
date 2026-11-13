@@ -41,6 +41,10 @@ test('the first run comes as the Host starts; later ones three hours apart once 
   assert.equal(groupingDue({ runs: [run(NOW - GROUPING_GAP_MS)], modelReady: true, now: NOW, changedAt: NOW - HOUR }), true);
   assert.equal(groupingDue({ runs: [run(NOW - GROUPING_GAP_MS)], modelReady: true, now: NOW, changedAt: NOW - GROUPING_GAP_MS - 30_000 }), true);
   assert.equal(groupingDue({ runs: [run(NOW - GROUPING_GAP_MS)], modelReady: true, now: NOW, changedAt: NOW - GROUPING_GAP_MS - 90_000 }), false);
+  // The three hours count from the run's start, less a minute: the hourly check that started a long run comes round a little early.
+  const longRun = (startedAgo: number): GroupingRun => ({ ...run(NOW - startedAgo + 18 * 60_000), at: new Date(NOW - startedAgo).toISOString() });
+  assert.equal(groupingDue({ runs: [longRun(GROUPING_GAP_MS - 30_000)], modelReady: true, now: NOW, changedAt: NOW - HOUR }), true);
+  assert.equal(groupingDue({ runs: [longRun(GROUPING_GAP_MS - 90_000)], modelReady: true, now: NOW, changedAt: NOW - HOUR }), false);
   assert.equal(groupingDue({ runs: [run(NOW - 2 * HOUR), run(NOW - HOUR, { error: '模型超时' })], modelReady: true, now: NOW, changedAt: undefined }), true);
   assert.equal(groupingDue({ runs: [run(NOW - HOUR, { modelUnavailable: true })], modelReady: false, now: NOW, changedAt: undefined }), false);
   assert.equal(groupingDue({ runs: [run(NOW - HOUR, { modelUnavailable: true })], modelReady: true, now: NOW, changedAt: undefined }), true);
