@@ -551,7 +551,14 @@ a.mydsh-chip-body:hover .mydsh-chip-label { text-decoration: underline dotted; }
 .mydsh-hh-line { min-height: 22px; margin-top: 4px; font-size: 13.5px; line-height: 22px; color: var(--dsw-alias-label-secondary); }
 .mydsh-hh-line b { margin: 0 3px; font-size: 16px; font-weight: 600; color: var(--dsw-alias-state-business-primary); font-variant-numeric: tabular-nums; }
 .mydsh-tb-head:has(> .mydsh-hh) > .mydsh-tb-row { margin-top: 8px; padding-right: 140px; }
-.mydsh-hh-whale { position: absolute; right: var(--mydsh-hh-inset); bottom: 0; height: 92px; pointer-events: none; user-select: none; }
+/* The whale is part of the head's background: light tints of DSH's blue, mixed with the page's background so they stay solid where its
+   parts overlap and turn with the theme. */
+.mydsh-hh-whale {
+  --mydsh-whale-main: color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, var(--dsw-alias-bg-base));
+  --mydsh-whale-line: color-mix(in srgb, var(--dsw-alias-state-business-primary) 26%, var(--dsw-alias-bg-base));
+  --mydsh-whale-dark: color-mix(in srgb, var(--dsw-alias-state-business-primary) 34%, var(--dsw-alias-bg-base));
+  position: absolute; right: var(--mydsh-hh-inset); bottom: 0; width: 124px; height: 92px; pointer-events: none; user-select: none;
+}
 @container (max-width: 659px) {
   .mydsh-hh-whale { display: none; }
   .mydsh-hh, .mydsh-tb-head:has(> .mydsh-hh) > .mydsh-tb-row { padding-right: 0; }

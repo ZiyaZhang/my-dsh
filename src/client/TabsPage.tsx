@@ -11,8 +11,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { IconChevronLeftOutlineRegular, IconFolderCloseRegular } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { BoardMatter, BoardSnapshot } from '../host/remote.js';
-// The whale at its laptop, from the whale illustrations; the build inlines it as a data URL.
-import whale from './art/whale-work.svg';
+import { WhaleAtWork } from './art/Whale.js';
 import type { BoardSource } from './board-source.js';
 import { ChatSplit } from './ChatSplit.js';
 import type { OpenDock } from './Dock.js';
@@ -153,13 +152,16 @@ function HomeLine({ stats }: { stats: readonly HomeStat[] }) {
   );
 }
 
-/** my dsh's head: the name over the sentence of numbers, and the whale at its laptop standing on the head's bottom line at the right. */
+/**
+ * my dsh's head: the name over the sentence of numbers, and in the background the whale at its laptop, in light tints of DSH's blue,
+ * standing on the head's bottom line at the right.
+ */
 function HomeHead({ stats }: { stats: readonly HomeStat[] }) {
   return (
     <div className="mydsh-hh">
       <h1>my dsh</h1>
       <p className="mydsh-hh-line">{stats.length > 0 && <HomeLine stats={stats} />}</p>
-      <img className="mydsh-hh-whale" src={whale} alt="" draggable={false} />
+      <WhaleAtWork className="mydsh-hh-whale" />
     </div>
   );
 }
