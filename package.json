@@ -1,6 +1,6 @@
 {
   "name": "dsh-my-dsh",
-  "version": "0.3.0-dev.6",
+  "version": "0.3.0-dev.7",
   "description": "A board of matters for DeepSeek Harness, with my dsh: an assistant that answers, hands work to sessions, follows up and reminds",
   "type": "module",
   "license": "MIT",

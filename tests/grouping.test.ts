@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  GROUPING_EVERY_MS, entryKey, groupingDue, looseSessions, mainWorkspace, pairKey, suggestionKey, suggestionViews, type GroupingRun, type Suggestion,
+  GROUPING_GAP_MS, entryKey, groupingDue, looseSessions, mainWorkspace, pairKey, suggestionKey, suggestionViews, type GroupingRun, type Suggestion,
 } from '../src/host/grouping.ts';
 import type { ActivityEntry, BoardSession, Matter } from '../src/host/remote.ts';
 import type { SessionView } from '../src/host/sessions.ts';
@@ -29,18 +29,21 @@ test('undoing an accepted suggestion declines the suggestion it stood for', () =
   assert.equal(entryKey(entry({ sessions: [] })), undefined);
 });
 
-test('the first run waits for the board to be read; later runs come a day apart, sooner after a failure or when a model turned up', () => {
-  assert.equal(groupingDue({ runs: [], opened: false, modelReady: true, now: NOW }), false);
-  assert.equal(groupingDue({ runs: [], opened: true, modelReady: false, now: NOW }), true);
+test('the first run comes as the Host starts; later ones three hours apart once something changed, sooner after a failure or when a model turned up', () => {
+  assert.equal(groupingDue({ runs: [], modelReady: false, now: NOW, changedAt: undefined }), true);
   // A first run that failed is tried again by the next check.
-  assert.equal(groupingDue({ runs: [run(NOW - HOUR, { error: 'x' })], opened: true, modelReady: true, now: NOW }), true);
-  assert.equal(groupingDue({ runs: [run(NOW - HOUR, { error: 'x' })], opened: false, modelReady: true, now: NOW }), false);
-  // After a finished run: a day later, whether or not the board was read since the start.
-  assert.equal(groupingDue({ runs: [run(NOW - 2 * HOUR)], opened: true, modelReady: true, now: NOW }), false);
-  assert.equal(groupingDue({ runs: [run(NOW - GROUPING_EVERY_MS)], opened: false, modelReady: true, now: NOW }), true);
-  assert.equal(groupingDue({ runs: [run(NOW - 2 * HOUR), run(NOW - HOUR, { error: '模型超时' })], opened: false, modelReady: true, now: NOW }), true);
-  assert.equal(groupingDue({ runs: [run(NOW - HOUR, { modelUnavailable: true })], opened: true, modelReady: false, now: NOW }), false);
-  assert.equal(groupingDue({ runs: [run(NOW - HOUR, { modelUnavailable: true })], opened: true, modelReady: true, now: NOW }), true);
+  assert.equal(groupingDue({ runs: [run(NOW - HOUR, { error: 'x' })], modelReady: true, now: NOW, changedAt: undefined }), true);
+  // After a finished run, nothing changed since it began: no run, however long ago it was.
+  assert.equal(groupingDue({ runs: [run(NOW - 10 * 24 * HOUR)], modelReady: true, now: NOW, changedAt: undefined }), false);
+  assert.equal(groupingDue({ runs: [run(NOW - 10 * 24 * HOUR)], modelReady: true, now: NOW, changedAt: NOW - 11 * 24 * HOUR }), false);
+  // Something changed: three hours after the run, and a change while it ran counts.
+  assert.equal(groupingDue({ runs: [run(NOW - 2 * HOUR)], modelReady: true, now: NOW, changedAt: NOW - HOUR }), false);
+  assert.equal(groupingDue({ runs: [run(NOW - GROUPING_GAP_MS)], modelReady: true, now: NOW, changedAt: NOW - HOUR }), true);
+  assert.equal(groupingDue({ runs: [run(NOW - GROUPING_GAP_MS)], modelReady: true, now: NOW, changedAt: NOW - GROUPING_GAP_MS - 30_000 }), true);
+  assert.equal(groupingDue({ runs: [run(NOW - GROUPING_GAP_MS)], modelReady: true, now: NOW, changedAt: NOW - GROUPING_GAP_MS - 90_000 }), false);
+  assert.equal(groupingDue({ runs: [run(NOW - 2 * HOUR), run(NOW - HOUR, { error: '模型超时' })], modelReady: true, now: NOW, changedAt: undefined }), true);
+  assert.equal(groupingDue({ runs: [run(NOW - HOUR, { modelUnavailable: true })], modelReady: false, now: NOW, changedAt: undefined }), false);
+  assert.equal(groupingDue({ runs: [run(NOW - HOUR, { modelUnavailable: true })], modelReady: true, now: NOW, changedAt: undefined }), true);
 });
 
 const view = (id: string, hoursAgo: number, extra: Partial<SessionView> = {}): SessionView => ({

@@ -1132,7 +1132,7 @@ export default class MyDsh extends TypertRemoteService {
 
   // ── 自动归类 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** The board was read: the first read after the Host started checks whether a run is due, which it is while none has finished. */
+  /** The board was read: the first read after the Host started checks whether a run is due. */
   private boardOpened(): void {
     if (this.boardRead) return;
     this.boardRead = true;
@@ -1143,10 +1143,22 @@ export default class MyDsh extends TypertRemoteService {
   private groupingCheck(): void {
     if (this.groupingRun || this.lifetime.signal.aborted) return;
     const modelReady = this.llm !== undefined && this.defaultModel !== undefined;
-    if (!groupingDue({ runs: this.grouping.peek().runs, opened: this.boardRead, modelReady, now: Date.now() })) return;
+    const matters = this.store.list();
+    const [newest] = this.looseNow(matters);
+    const changes = [...(newest ? [newest.lastActivity] : []), ...matters.filter(matter => !matter.archivedAt).map(matter => Date.parse(matter.createdAt))]
+      .filter(Number.isFinite);
+    const changedAt = changes.length > 0 ? Math.max(...changes) : undefined;
+    if (!groupingDue({ runs: this.grouping.peek().runs, modelReady, now: Date.now(), changedAt })) return;
     this.groupingRun = this.group()
       .catch((error: unknown) => { this.ctx.logger.warn('my-dsh: a run of automatic grouping was not recorded: %s', message(error)); })
       .finally(() => { this.groupingRun = undefined; });
+  }
+
+  /** The loose sessions of the review's window ({@link looseSessions}), newest first. */
+  private looseNow(matters: readonly Matter[]): SessionView[] {
+    return looseSessions(this.sessions.all().map(sessionView), {
+      matters, archived: new Set(this.ctx.workspaceRegistry.archivedSessionIds), hidden: this.conversations(matters), since: Date.now() - REVIEW_DAYS * DAY_MS,
+    });
   }
 
   /**
@@ -1165,9 +1177,7 @@ export default class MyDsh extends TypertRemoteService {
     try {
       await this.loadSessions();
       const matters = this.store.list();
-      const loose = looseSessions(this.sessions.all().map(sessionView), {
-        matters, archived: new Set(this.ctx.workspaceRegistry.archivedSessionIds), hidden: this.conversations(matters), since: Date.now() - REVIEW_DAYS * DAY_MS,
-      });
+      const loose = this.looseNow(matters);
       counts.loose = loose.length;
       counts.read = await this.readEvidence(loose.slice(0, GROUPING_LOGS), signal);
       const input = await this.ruleInput(loose, matters, await this.scheduleEntries());

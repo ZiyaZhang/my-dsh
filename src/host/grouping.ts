@@ -8,8 +8,8 @@
 import type { ActivityEntry, BoardSession, Matter, OriginRule, SuggestionView } from './remote.js';
 import type { SessionView } from './sessions.js';
 
-/** How long after a finished run the next one is due. */
-export const GROUPING_EVERY_MS = 24 * 60 * 60 * 1000;
+/** How long after a finished run the next one may start, once something it reads changed since that run began. */
+export const GROUPING_GAP_MS = 3 * 60 * 60 * 1000;
 
 /** What a suggestion changes: several loose sessions go into a new matter, or one loose session into a matter in progress. */
 export type SuggestionChange =
@@ -80,16 +80,17 @@ export function entryKey(entry: ActivityEntry): string | undefined {
 }
 
 /**
- * A run is due. While none has finished: once the board was read since the Host started (a failed first run is tried again by the next
- * check). After one finished: when the run after it failed, when it had to leave the model out and a model is there now, and a day after
- * it otherwise.
+ * A run is due. While none has finished: at once, so the first comes as the Host starts (a failed first run is tried again by the next
+ * check). After one finished: when the run after it failed; when it had to leave the model out and a model is there now; otherwise
+ * {@link GROUPING_GAP_MS} after it, once something changed since it began (`changedAt`: the newest activity of a loose session, or the
+ * making of a matter), so a quiet spell costs no run.
  */
-export function groupingDue(input: { runs: readonly GroupingRun[]; opened: boolean; modelReady: boolean; now: number }): boolean {
+export function groupingDue(input: { runs: readonly GroupingRun[]; modelReady: boolean; now: number; changedAt: number | undefined }): boolean {
   const done = input.runs.findLast(run => run.error === undefined);
-  if (!done) return input.opened;
+  if (!done) return true;
   if (input.runs.at(-1)!.error !== undefined) return true;
   if (done.modelUnavailable && input.modelReady) return true;
-  return input.now - Date.parse(done.endedAt) >= GROUPING_EVERY_MS;
+  return input.changedAt !== undefined && input.changedAt > Date.parse(done.at) && input.now - Date.parse(done.endedAt) >= GROUPING_GAP_MS;
 }
 
 /**

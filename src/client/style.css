@@ -527,16 +527,20 @@ a.mydsh-chip-body:hover .mydsh-chip-label { text-decoration: underline dotted; }
 .mydsh-tb-chat { display: flex; flex: 1 1 0; min-height: 0; }
 .mydsh-hd-stat { display: inline-flex; align-items: baseline; }
 
-/* my dsh's head: the name at 22px over the sentence of numbers, the numbers in DSH's blue, and at the right the whale at its laptop
-   standing on the head's bottom line, beside the end of the tab row, which leaves it room. A head narrower than 660px lets the whale go.
-   Only my dsh's head is a size container, so a matter's head, whose menus open over the board, stays out of containment. */
-.mydsh-tb-head:has(> .mydsh-hh) { position: relative; container-type: inline-size; }
-.mydsh-hh { padding-right: 168px; }
+/* my dsh's head: the name at 22px over the sentence of numbers, the numbers in DSH's blue. Its content lines up with the board's column
+   below (.mydsh-pj: 960px at most, the page's gutter inside), and the whale at its laptop stands on the head's bottom line at that
+   column's right edge, beside the end of the tab row, which leaves it room. A column narrower than 660px lets the whale go. Only my dsh's
+   head is a size container, so a matter's head, whose menus open over the board, stays out of containment. */
+.mydsh-tb-head:has(> .mydsh-hh) {
+  --mydsh-hh-inset: calc(max(0px, (100% - 960px) / 2) + var(--mydsh-gutter));
+  position: relative; container-type: inline-size; padding-right: var(--mydsh-hh-inset); padding-left: var(--mydsh-hh-inset);
+}
+.mydsh-hh { padding-right: 140px; }
 .mydsh-hh h1 { font-size: 22px; line-height: 30px; font-weight: 600; }
 .mydsh-hh-line { min-height: 22px; margin-top: 4px; font-size: 13.5px; line-height: 22px; color: var(--dsw-alias-label-secondary); }
 .mydsh-hh-line b { margin: 0 3px; font-size: 16px; font-weight: 600; color: var(--dsw-alias-state-business-primary); font-variant-numeric: tabular-nums; }
-.mydsh-tb-head:has(> .mydsh-hh) > .mydsh-tb-row { margin-top: 8px; padding-right: 168px; }
-.mydsh-hh-whale { position: absolute; right: 28px; bottom: 0; height: 92px; pointer-events: none; user-select: none; }
+.mydsh-tb-head:has(> .mydsh-hh) > .mydsh-tb-row { margin-top: 8px; padding-right: 140px; }
+.mydsh-hh-whale { position: absolute; right: var(--mydsh-hh-inset); bottom: 0; height: 92px; pointer-events: none; user-select: none; }
 @container (max-width: 659px) {
   .mydsh-hh-whale { display: none; }
   .mydsh-hh, .mydsh-tb-head:has(> .mydsh-hh) > .mydsh-tb-row { padding-right: 0; }
