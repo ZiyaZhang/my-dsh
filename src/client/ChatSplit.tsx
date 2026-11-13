@@ -21,14 +21,10 @@ function browserStorage(): Storage | undefined {
 /** DSH's right sidebar glyph: the left-panel icon turned around. */
 const PanelGlyph = () => <IconPanelLeftOutlineRegular size={16} className="mydsh-cs-glyph" />;
 
-/**
- * @param title - the column's heading.
- * @param tools - links at the head's right, before the button that puts the column away.
- */
-export function ChatSplit({ conversation, title, tools, children }: {
+/** @param title - the column's heading, beside the button that puts the column away. */
+export function ChatSplit({ conversation, title, children }: {
   conversation: ReactNode;
   title: string;
-  tools?: ReactNode;
   children: ReactNode;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -108,7 +104,6 @@ export function ChatSplit({ conversation, title, tools, children }: {
           <div className="mydsh-cs-head">
             <b>{title}</b>
             <span className="mydsh-cs-tools">
-              {tools}
               <Tooltip label="收起侧边栏" side="bottom" delayMs={500}>
                 <button type="button" className="mydsh-cs-icon" aria-label="收起右侧边栏" onClick={() => { keep({ ...setting, open: false }); }}>
                   <PanelGlyph />

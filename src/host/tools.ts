@@ -42,6 +42,9 @@ function sessionRecentTool(mydsh: MyDsh) {
   });
 }
 
+/** The `last` parameter of start_session and send_to_session: in a hosted matter, whether this is the user's last step. */
+const LAST = '托管的事项里，这是用户交代的最后一步就填 true：它做完以后不再叫醒你。不是最后一步、或者没托管，就不填。这个标记不用跟用户提。';
+
 /** What a matter's conversation coordinates with: reading a session, starting one, writing to one, and noting the user's words. */
 export function coordinationTools(mydsh: MyDsh) {
   return [
@@ -54,6 +57,7 @@ export function coordinationTools(mydsh: MyDsh) {
         title: { type: 'string', required: true, description: '新会话的标题，短。' },
         task: { type: 'string', required: true, description: '发给新会话的完整任务说明，要让它不看这里的对话也能开始做。' },
         why: { type: 'string', required: true, description: '一句话：为什么派到这件事项。' },
+        last: { type: 'boolean', description: LAST },
       },
       output: text,
       presentCall: args => ({ card: 'generic', title: `开会话 · ${args.title}`, kind: 'execute' }),
@@ -68,6 +72,7 @@ export function coordinationTools(mydsh: MyDsh) {
         sessionId: SESSION_ID,
         text: { type: 'string', required: true, description: '发给这条会话的话。' },
         why: { type: 'string', required: true, description: '一句话：为什么发给这条会话。' },
+        last: { type: 'boolean', description: LAST },
       },
       output: text,
       presentCall: () => ({ card: 'generic', title: '发消息给会话', kind: 'execute' }),

@@ -24,18 +24,19 @@ const dotOf = (state: BoardSession['state']): StateDotState =>
 
 const DAY = 24 * 60 * 60 * 1000;
 
-function Group({ title, count, empty, folded = false, children }: {
-  title: string; count: number; empty?: string; folded?: boolean; children?: ReactNode;
+/** A group of rows under its name and count; an empty group is left out. */
+function Group({ title, count, folded = false, children }: {
+  title: string; count: number; folded?: boolean; children?: ReactNode;
 }) {
   const [open, setOpen] = useState(!folded);
-  if (count === 0 && empty === undefined) return null;
+  if (count === 0) return null;
   return (
     <section className="mydsh-mn-group">
       <button type="button" className="mydsh-mn-group-head" aria-expanded={open} onClick={() => { setOpen(!open); }}>
         {title} · {count}
         <IconChevronDownOutlineRegular size={12} className={open ? '' : 'is-folded'} />
       </button>
-      {open && (count === 0 ? <p className="mydsh-mn-empty">{empty}</p> : <div className="mydsh-mn-rows">{children}</div>)}
+      {open && <div className="mydsh-mn-rows">{children}</div>}
     </section>
   );
 }
@@ -68,7 +69,7 @@ export function HomeGroups({ snapshot, now, openSession, openMatter }: {
   const today = snapshot.review.find(day => day.daysAgo === 0)?.sessions.filter(session => session.state === 'idle') ?? [];
   return (
     <>
-      <Group title="待处理" count={waiting.length} empty="没有等待回答或审批的会话">
+      <Group title="待处理" count={waiting.length}>
         {waiting.map(row => (
           <Row key={row.id} mark={<StateDot state="warning" />} title={row.title} sub={row.matter ? `${row.matter.name} · ${row.line}` : row.line} time={row.at} onOpen={() => { openSession(row.id); }} />
         ))}
@@ -156,7 +157,7 @@ export function MatterGroups({ matter, now, openSession }: { matter: BoardMatter
   );
   return (
     <>
-      <Group title="待处理" count={waiting.length} empty="没有等待回答或审批的会话">{waiting.map(row)}</Group>
+      <Group title="待处理" count={waiting.length}>{waiting.map(row)}</Group>
       <Group title="进行中" count={running.length}>{running.map(row)}</Group>
       <Group title="这周" count={recent.length}>{recent.map(row)}</Group>
       <Group title="更早" count={older.length} folded>{older.map(row)}</Group>

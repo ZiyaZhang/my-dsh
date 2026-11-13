@@ -470,7 +470,7 @@ export default class MyDsh extends TypertRemoteService {
    */
   async sessionRecent(sessionId: string, caller: ToolCaller) {
     const { signal } = caller;
-    const { scope } = this.callerSession(caller, false);
+    const { scope } = this.callerSession(caller, 'any');
     checkReach(scope, sessionId);
     await this.requireSession(sessionId);
     if (sessionId === this.assistant.peek().sessionId) throw new RequestError('这是 my dsh 自己的会话');
@@ -501,8 +501,8 @@ export default class MyDsh extends TypertRemoteService {
    * gets the matter's permission preset before the task, so its first turn runs under it; when the preset cannot be applied, no task is
    * sent rather than one running under DSH's default.
    */
-  async startSession(args: { matterId?: string; title: string; task: string; why: string }, caller: ToolCaller) {
-    const { session, scope } = this.callerSession(caller, true);
+  async startSession(args: { matterId?: string; title: string; task: string; why: string; last?: boolean }, caller: ToolCaller) {
+    const { session, scope } = this.callerSession(caller, 'dispatch');
     const title = required(args.title, '标题', TITLE_MAX);
     const task = args.task.trim();
     if (!task) throw new RequestError('task 不能为空');
@@ -529,7 +529,7 @@ export default class MyDsh extends TypertRemoteService {
     // In the matter before the task goes in: its first step reads the matter's context, and 往回报 follows it from its first turn.
     const at = new Date().toISOString();
     const joined = await this.store.update(matters => addSession(matters, matter.id, { sessionId, by: 'mydsh', at, why }));
-    if (scope.kind === 'conversation') this.books = watch(this.books, scope.sessionId, sessionId);
+    if (scope.kind === 'conversation') this.books = watch(this.books, scope.sessionId, sessionId, args.last === true);
     const sent = sentText(task, this.turns.get(session.id)?.prompt, `${ASK_USER_LINE}\n${RESULT_LINE}`);
     live.agent.followup(createUserMessage({ content: [{ type: 'text', text: sent }], source: { kind: 'my-dsh' } }));
 
@@ -545,8 +545,8 @@ export default class MyDsh extends TypertRemoteService {
    * one starts a turn, and leave a receipt. A matter's conversation sends to its matter's sessions only, and watches the one it sent to
    * for 往回报.
    */
-  async sendToSession(args: { sessionId: string; text: string; why: string }, caller: ToolCaller) {
-    const { session, scope } = this.callerSession(caller, true);
+  async sendToSession(args: { sessionId: string; text: string; why: string; last?: boolean }, caller: ToolCaller) {
+    const { session, scope } = this.callerSession(caller, 'dispatch');
     const text = args.text.trim();
     if (!text) throw new RequestError('text 不能为空');
     if ([...text].length > TASK_MAX) throw new RequestError(`text 最多 ${TASK_MAX} 个字`);
@@ -563,7 +563,7 @@ export default class MyDsh extends TypertRemoteService {
       throw live.error;
     }
     live.agent.steer(createUserMessage({ content: [{ type: 'text', text: sentText(text, this.turns.get(session.id)?.prompt, RESULT_LINE) }], source: { kind: 'my-dsh' } }));
-    if (scope.kind === 'conversation') this.books = watch(this.books, scope.sessionId, args.sessionId);
+    if (scope.kind === 'conversation') this.books = watch(this.books, scope.sessionId, args.sessionId, args.last === true);
 
     const at = new Date().toISOString();
     const link = linkOf(this.store.list(), args.sessionId);
@@ -583,7 +583,7 @@ export default class MyDsh extends TypertRemoteService {
    * source, and leave a receipt. A matter's conversation writes into its own matter only.
    */
   async noteMatter(args: { matterId?: string; kind: NoteKind; text: string }, caller: ToolCaller) {
-    const { session, scope } = this.callerSession(caller, true);
+    const { session, scope } = this.callerSession(caller, 'person');
     if (!NOTE_KINDS.includes(args.kind)) throw new RequestError(`kind 只能是 ${NOTE_KINDS.join('、')}`);
     const text = noteText(args.text);
     const matterId = matterFor(scope, args.matterId);
@@ -613,7 +613,7 @@ export default class MyDsh extends TypertRemoteService {
    * my dsh's own session passes words on, in a turn the user started.
    */
   async forwardToMatter(args: { matterId: string; messages?: number; why: string }, caller: ToolCaller) {
-    const { session } = this.callerSession(caller, true, 'assistant');
+    const { session } = this.callerSession(caller, 'person', 'assistant');
     const why = required(args.why, 'why', WHY_MAX);
     const count = args.messages ?? 1;
     if (!Number.isInteger(count) || count < 1 || count > FORWARD_MESSAGES_MAX) throw new RequestError(`messages 只能是 1 到 ${FORWARD_MESSAGES_MAX}`);
@@ -659,7 +659,7 @@ export default class MyDsh extends TypertRemoteService {
     kind: ProposalChange['kind']; name?: string; goal?: string; workspaceId?: string; matterId?: string; fromId?: string; intoId?: string;
     phrase?: string; why: string;
   }, caller: ToolCaller) {
-    const { session } = this.callerSession(caller, false, 'assistant');
+    const { session } = this.callerSession(caller, 'any', 'assistant');
     const why = required(args.why, 'why', WHY_MAX);
     const phrase = args.phrase?.trim() ? line(args.phrase, 'phrase', 1, ALIAS_MAX) : undefined;
     const matters = this.store.list();
@@ -702,7 +702,7 @@ export default class MyDsh extends TypertRemoteService {
 
   /** Store a candidate question for the user to answer on its card. */
   async askWhich(args: { phrase: string; candidates: { kind: 'matter' | 'session'; id: string }[]; why: string }, caller: ToolCaller) {
-    const { session } = this.callerSession(caller, false, 'assistant');
+    const { session } = this.callerSession(caller, 'any', 'assistant');
     const phrase = line(args.phrase, 'phrase', 1, ALIAS_MAX);
     const why = required(args.why, 'why', WHY_MAX);
     if (args.candidates.length < 1 || args.candidates.length > CANDIDATES_MAX) throw new RequestError(`candidates 要有 1 到 ${CANDIDATES_MAX} 个`);
@@ -814,18 +814,22 @@ export default class MyDsh extends TypertRemoteService {
   }
 
   /**
-   * The tool runs in my dsh's own session or, unless `only` says so, in a matter's conversation; with `userTurn`, in a turn a person's
-   * prompt started.
+   * The tool runs in my dsh's own session or, unless `only` says so, in a matter's conversation. `turn` says which turns it may run in:
+   * `any`; `person`, a turn a person's prompt started; `dispatch`, that or the turn a wake opened in a hosted matter's conversation, since
+   * 托管 lets the conversation send the next step out on its own (as many wakes in a row as the book allows).
    * @returns the session and what it is, with the conversation's matter.
    */
-  private callerSession(caller: ToolCaller, userTurn: boolean, only?: 'assistant'): { session: Session; scope: Caller } {
+  private callerSession(caller: ToolCaller, turn: 'any' | 'person' | 'dispatch', only?: 'assistant'): { session: Session; scope: Caller } {
     const session = caller.agent?.session;
     if (!session) throw new RequestError('这个工具要在会话里调用');
     const scope = this.callerKind(session.id);
     if (!scope || (only && scope.kind !== only)) {
       throw new RequestError(only ? '这个工具只在首页的 my dsh 对话里能用' : '这个工具只在首页的 my dsh 和事项的对话里能用');
     }
-    if (userTurn && !this.turns.get(session.id)?.byUser) throw new RequestError('这一轮不是用户发起的，my dsh 不往会话里写');
+    const hostedWake = scope.kind === 'conversation' && scope.matter.hosting !== undefined && !scope.matter.archivedAt && this.books.get(session.id)?.waking === true;
+    if (turn !== 'any' && !this.turns.get(session.id)?.byUser && !(turn === 'dispatch' && hostedWake)) {
+      throw new RequestError('这一轮不是用户发起的，my dsh 不往会话里写');
+    }
     return { session, scope };
   }
 

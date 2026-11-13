@@ -41,7 +41,7 @@ test('a matter\'s conversation reads its rules, the matter\'s context, its memor
   const rules = conversationRules('SDK 升级跟进').split('\n');
   const dispatched = rules.findIndex(rule => rule.startsWith('- 派出去以后'));
   assert.match(rules[dispatched + 1]!, /^- 你派出去的每条会话，在派它的那一轮下面有一张卡片，一直显示它在做的这一步、结果开头、报错或它问用户的话，用户看得到。所以你不复述结果，也不提卡片/);
-  assert.match(rules[dispatched + 2]!, /^- 这件事托管时，你派出去的会话都停下后会收到一条“派出去的会话有结果了”，照那条消息做。没托管时不会收到/);
+  assert.match(rules[dispatched + 2]!, /^- 这件事托管时，你派出去的会话都停下后会收到一条“派出去的会话有结果了”，照那条消息做；派用户交代的最后一步时带上 last: true（不用跟用户提），它做完就不再叫醒你。没托管时不会收到/);
   // The sessions' own matter line is left out: the rules already say which matter this is.
   assert.doesNotMatch(text, /这条会话属于事项/);
 });

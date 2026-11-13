@@ -67,7 +67,7 @@ export function TabsFrame({ head, label, tabsEnd, tab, setTab, openDock, prefill
   /** The conversation's composer for 看板; `onSent` runs once it sent a message. */
   composer: (onSent: () => void) => ReactNode;
   board: (parts: TabParts) => ReactNode;
-  chat: (parts: { showBoard: () => void; openChat: (text?: string) => void }) => ReactNode;
+  chat: (parts: { openChat: (text?: string) => void }) => ReactNode;
 }) {
   const held = useRef<string | undefined>(undefined);
   const pending = useRef<string | undefined>(undefined);
@@ -121,7 +121,7 @@ export function TabsFrame({ head, label, tabsEnd, tab, setTab, openDock, prefill
         </div>
       </header>
       <div className="mydsh-tb-board" hidden={tab !== 'board'}>{board({ ask, openChat })}</div>
-      <div className="mydsh-tb-chat" hidden={tab !== 'chat'}>{tab === 'chat' && chat({ showBoard: () => { setTab('board'); }, openChat })}</div>
+      <div className="mydsh-tb-chat" hidden={tab !== 'chat'}>{tab === 'chat' && chat({ openChat })}</div>
     </div>
   );
 }
@@ -163,9 +163,6 @@ function HomeHead({ stats }: { stats: readonly HomeStat[] }) {
     </div>
   );
 }
-
-/** The 整页看 link at the head of 对话's column, back to 看板. */
-const FullBoard = ({ showBoard }: { showBoard: () => void }) => <button type="button" className="mydsh-link is-quiet" onClick={showBoard}>整页看</button>;
 
 /**
  * my dsh's page: the head with the numbers, then the home board under my dsh's input, and in 对话 my dsh's conversation beside the
@@ -229,8 +226,8 @@ export function MyDshTabs({ source, call, dialogs, openSession, openMatter, show
           {state.status === 'failed' && <p className="mydsh-error">读不到看板：{state.error}</p>}
         </div>
       )}
-      chat={({ showBoard }) => (
-        <ChatSplit conversation={conversation} title="看板" tools={<FullBoard showBoard={showBoard} />}>
+      chat={() => (
+        <ChatSplit conversation={conversation} title="看板">
           {snapshot
             ? <HomeGroups snapshot={snapshot} now={now} openSession={openSession} openMatter={(matterId) => { openMatter(matterId); }} />
             : state.status === 'failed' ? <p className="mydsh-error">读不到看板：{state.error}</p> : <p className="mydsh-quiet">正在读取</p>}
@@ -315,8 +312,8 @@ export function MatterTabs({
           openChat={openChat} useSessionStatus={useSessionStatus}
         />
       )}
-      chat={({ showBoard, openChat }) => (
-        <ChatSplit conversation={conversation} title="看板" tools={<FullBoard showBoard={showBoard} />}>
+      chat={({ openChat }) => (
+        <ChatSplit conversation={conversation} title="看板">
           <MatterGroups matter={matter} now={now} openSession={openSession} />
           <div className="mydsh-rt-panels">
             <MatterSide matter={matter} call={call} now={now} openSession={openSession} editContext={editContext} editInChat={(text) => { openChat(text); }} />

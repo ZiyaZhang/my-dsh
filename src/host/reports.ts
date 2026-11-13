@@ -32,6 +32,11 @@ export interface ReportNote {
 export interface Book {
   /** The sessions it dispatched, in the order it first did. */
   watched: string[];
+  /**
+   * The watched sessions it last sent what it called the user's last step: a turn of theirs that completes leaves no note, so the work
+   * ending wakes no one; one that fails or stops still does.
+   */
+  last: string[];
   /** At most one per watched session whose turn ended since the last wake, oldest first. */
   notes: ReportNote[];
   /** Wakes since the user last spoke in the dispatcher. */
@@ -45,7 +50,7 @@ export interface Book {
 /** Books by dispatcher session id. */
 export type Books = ReadonlyMap<string, Book>;
 
-const emptyBook = (): Book => ({ watched: [], notes: [], wakes: 0, paused: false, waking: false });
+const emptyBook = (): Book => ({ watched: [], last: [], notes: [], wakes: 0, paused: false, waking: false });
 
 /** Change one dispatcher's book; undefined from `change` drops it. Books stay the same object when nothing changes. */
 function update(books: Books, dispatcher: string, change: (book: Book) => Book | undefined): Books {
@@ -59,11 +64,16 @@ function update(books: Books, dispatcher: string, change: (book: Book) => Book |
   return copy;
 }
 
-/** The dispatcher dispatched a session: it is watched from now on. A session it already watches changes nothing. */
-export function watch(books: Books, dispatcher: string, sessionId: string): Books {
+/**
+ * The dispatcher dispatched a session: it is watched from now on, and `last` says whether what it sent is the user's last step. Sending
+ * to a session it already watches only changes that.
+ */
+export function watch(books: Books, dispatcher: string, sessionId: string, last = false): Books {
   const book = books.get(dispatcher) ?? emptyBook();
-  if (book.watched.includes(sessionId)) return books;
-  return new Map(books).set(dispatcher, { ...book, watched: [...book.watched, sessionId] });
+  const watched = book.watched.includes(sessionId) ? book.watched : [...book.watched, sessionId];
+  const finals = last ? [...new Set([...book.last, sessionId])] : book.last.filter(id => id !== sessionId);
+  if (watched === book.watched && finals.length === book.last.length && finals.every(id => book.last.includes(id))) return books;
+  return new Map(books).set(dispatcher, { ...book, watched, last: finals });
 }
 
 /** The dispatchers that watch a session. */
@@ -71,11 +81,17 @@ export function watchersOf(books: Books, sessionId: string): string[] {
   return [...books].flatMap(([dispatcher, book]) => (book.watched.includes(sessionId) ? [dispatcher] : []));
 }
 
-/** A session's turn ended: a note for each dispatcher that watches it, replacing its older note there. Unwatched sessions leave none. */
+/**
+ * A session's turn ended: a note for each dispatcher that watches it, replacing its older note there. Unwatched sessions leave none, and
+ * neither does a completed turn of a session the dispatcher sent its last step to: the step is done, and its card shows the result.
+ */
 export function noteTurnEnd(books: Books, note: ReportNote): Books {
   let next = books;
   for (const dispatcher of watchersOf(books, note.sessionId)) {
-    next = update(next, dispatcher, book => ({ ...book, notes: [...book.notes.filter(old => old.sessionId !== note.sessionId), { ...note }] }));
+    next = update(next, dispatcher, (book) => {
+      const others = book.notes.filter(old => old.sessionId !== note.sessionId);
+      return { ...book, notes: book.last.includes(note.sessionId) && note.outcome === 'completed' ? others : [...others, { ...note }] };
+    });
   }
   return next;
 }
@@ -169,8 +185,10 @@ function waitingLine(session: WaitingSession): string {
 }
 
 /** What a wake's turn does, as its message says it. */
-export const WAKE_TURN = '这些会话的状态和结果，卡片上已经显示给用户了，不要复述。这件事托管着：用户交代过、还没做完的下一步，直接用 start_session 或 send_to_session 派出去，不用先问；'
-  + '要用户定的事才说话，一两句说清要定什么。都没有就结束这一轮，不输出任何内容：你的回复是空的，没有一个字，也没有标点。要细节用 session_recent 读。';
+export const WAKE_TURN = '这些会话的状态和结果，卡片上已经显示给用户了，不要复述；要细节用 session_recent 读。这件事托管着：用户交代过、还没做完的下一步，'
+  + '直接用 start_session 或 send_to_session 派出去，不用先问；派的是最后一步就带上 last: true，它做完不会再叫醒你。要用户定的事才说话，一两句说清要定什么。';
+/** The wake message's last sentence: with nothing to send out and nothing to ask, the turn says nothing. */
+export const WAKE_QUIET = '都没有：这一轮什么都不输出，直接结束，“好”“结束”这类字也不写。';
 
 /**
  * The wake's message: each note's outcome, the watched sessions still waiting for the user, and what this turn is for. The user already
@@ -180,7 +198,7 @@ export function reportText(notes: readonly ReportNote[], waiting: readonly Waiti
   const lines = ['派出去的会话有结果了：', ...notes.map(noteLine)];
   if (waiting.length) lines.push('还在等用户的：', ...waiting.map(waitingLine));
   const refused = notes.some(note => note.refused?.length) ? '用户拒绝过的操作没有执行，照实说，不要说它做成了。' : '';
-  lines.push(`${WAKE_TURN}${refused}${waiting.length ? '在等用户的会话不用提，用户在卡片和“待处理”里能直接处理。' : ''}`);
+  lines.push(`${WAKE_TURN}${refused}${waiting.length ? '在等用户的会话不用提，用户在卡片和“待处理”里能直接处理。' : ''}${WAKE_QUIET}`);
   return lines.join('\n');
 }
 

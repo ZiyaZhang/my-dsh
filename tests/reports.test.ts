@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  REPLY_CHARS, WAKES_MAX, WAKE_TURN, forgetDispatcher, forgetSession, noteTurnEnd, reportSummary, reportText, shouldWake, turnEndKind, userTurn, wakeSent,
+  REPLY_CHARS, WAKES_MAX, WAKE_QUIET, WAKE_TURN, forgetDispatcher, forgetSession, noteTurnEnd, reportSummary, reportText, shouldWake, turnEndKind, userTurn, wakeSent,
   wakeTurnEnded, watch, watchersOf, type Book, type Books, type ReportNote, type WakeStates,
 } from '../src/host/reports.ts';
 import type { SessionState } from '../src/host/remote.ts';
@@ -15,7 +15,7 @@ const states = (dispatcher: SessionState | undefined, sessions: Record<string, S
 
 test('a session the conversation dispatched is watched once; a note comes only from a watched session, and a newer one replaces the older', () => {
   const start = books();
-  assert.deepEqual(book(start), { watched: ['s-1', 's-2'], notes: [], wakes: 0, paused: false, waking: false });
+  assert.deepEqual(book(start), { watched: ['s-1', 's-2'], last: [], notes: [], wakes: 0, paused: false, waking: false });
   // Sending again to a watched session changes nothing.
   assert.equal(watch(start, 's-talk', 's-1'), start);
   assert.deepEqual(watchersOf(start, 's-1'), ['s-talk']);
@@ -125,13 +125,13 @@ test('the message says how each turn ended, with the start of a finished reply a
     '还在等用户的：',
     '- 「定开关」在等用户回答问题（id=s-7）。',
     '- 「删目录」在等用户批准bash（id=s-8）。',
-    `${WAKE_TURN}在等用户的会话不用提，用户在卡片和“待处理”里能直接处理。`,
+    `${WAKE_TURN}在等用户的会话不用提，用户在卡片和“待处理”里能直接处理。${WAKE_QUIET}`,
   ].join('\n'));
   // Without waiting sessions the block and its sentence are left out.
   assert.equal(reportText([notes[2]!], []), [
     '派出去的会话有结果了：',
     '- 「装插件」被停下了（id=s-3）。',
-    WAKE_TURN,
+    `${WAKE_TURN}${WAKE_QUIET}`,
   ].join('\n'));
   for (const outcome of ['interrupted', 'blocked', 'forked']) {
     assert.match(reportText([{ sessionId: 's-9', title: 'x', outcome }], []), new RegExp(`- 「x」停下了（id=s-9，${outcome}）。`));
@@ -148,7 +148,7 @@ test('what the user rejected goes into the note and the instruction, whatever th
     '派出去的会话有结果了：',
     '- 「写文件」做完了（id=s-1）。用户拒绝了write，这些操作没有执行。最后的回复：完成',
     '- 「跑脚本」出错了（id=s-2）：退出码 1。用户拒绝了bash，这些操作没有执行。',
-    `${WAKE_TURN}用户拒绝过的操作没有执行，照实说，不要说它做成了。`,
+    `${WAKE_TURN}用户拒绝过的操作没有执行，照实说，不要说它做成了。${WAKE_QUIET}`,
   ].join('\n'));
 });
 
@@ -165,4 +165,27 @@ test('a turn end event names how the turn ended', () => {
   assert.equal(turnEndKind({ turn: 3, reason: { kind: 'error', error: { message: '没过' } } }), 'error');
   assert.equal(turnEndKind({ turn: 3 }), undefined);
   assert.equal(turnEndKind(null), undefined);
+});
+
+test('a completed turn of a session sent the user\'s last step leaves no note, so the work ending wakes no one; a failed one still does', () => {
+  // The dispatcher sent s-2 the last step after s-1 finished and was reported.
+  const sent = watch(books(), 's-talk', 's-2', true);
+  assert.deepEqual(book(sent).last, ['s-2']);
+  assert.equal(watch(sent, 's-talk', 's-2', true), sent);
+  const quiet = noteTurnEnd(sent, done('s-2'));
+  assert.deepEqual(book(quiet).notes, []);
+  assert.equal(shouldWake(book(quiet), states('idle')), false);
+  // A last step that fails or is stopped is reported, so the conversation can act on it.
+  const failed = noteTurnEnd(sent, { sessionId: 's-2', title: '会话 s-2', outcome: 'error', text: '构建没过' });
+  assert.equal(shouldWake(book(failed), states('idle')), true);
+  // Its completed turn also takes back an older note of the same session.
+  assert.deepEqual(book(noteTurnEnd(failed, done('s-2'))).notes, []);
+  // Another step sent to the same session without the mark makes it an ordinary dispatch again.
+  const again = watch(sent, 's-talk', 's-2');
+  assert.deepEqual(book(again).last, []);
+  assert.equal(shouldWake(book(noteTurnEnd(again, done('s-2'))), states('idle')), true);
+  // Another session's ordinary note still wakes the dispatcher, with that note alone.
+  const mixed = noteTurnEnd(noteTurnEnd(sent, done('s-1')), done('s-2'));
+  assert.deepEqual(book(mixed).notes.map(note => note.sessionId), ['s-1']);
+  assert.equal(shouldWake(book(mixed), states('idle')), true);
 });
