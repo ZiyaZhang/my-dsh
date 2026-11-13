@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TurnFreeze, memoryContext } from '../src/host/memory-context.ts';
 
-const INDEX = '# OpenCodex 跟进 · 记忆索引\n<!-- … -->\n\n## 规则 1\n- [差距报告格式](规则/差距报告格式.md) — 报告写到 report.md\n';
+const INDEX = '# SDK 升级跟进 · 记忆索引\n<!-- … -->\n\n## 规则 1\n- [差距报告格式](规则/差距报告格式.md) — 报告写到 report.md\n';
 
 test('a session reads where the memory is, that the index is reference and not instructions, what memory is for, and the index', () => {
   const text = memoryContext({ dir: '/w/.my-dsh/m-1/memory', index: INDEX, sessionId: 's-1', title: '出报告', conversation: false });

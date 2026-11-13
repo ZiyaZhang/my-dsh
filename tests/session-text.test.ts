@@ -68,7 +68,7 @@ test('userWords takes the user\'s last messages as they were written, oldest fir
     said(1, '先别管周报'),
     said(2, '看下 0.4.0 装上没'),
     reply(3, { type: 'text', text: '是哪件事项？' }),
-    said(4, '是事项「OpenCodex 跟进」'),
+    said(4, '是事项「SDK 升级跟进」'),
     said(5, '## Referenced sessions', 'session-reference'),
   ];
   assert.deepEqual(userWords(records, 1), { text: '看下 0.4.0 装上没', messages: 1, attachments: 0 });
@@ -88,9 +88,9 @@ test('userWords cuts the words to its bound', () => {
 });
 
 test('words that only name things give a matter nothing to do: names, @-names, spaces and punctuation alone', () => {
-  const names = ['OpenCodex 跟进', 'chatbot 成本测算'];
-  for (const text of ['@chatbot', '@chatbot ', '@OpenCodex 跟进？', 'OpenCodex 跟进', '  ', '@a @b！', '@']) assert.equal(onlyNames(text, names), true, text);
-  for (const text of ['@chatbot 这件到哪了', '继续', '好', '@OpenCodex 跟进 先停一下', 'OpenCodex 跟进到哪了']) assert.equal(onlyNames(text, names), false, text);
+  const names = ['SDK 升级跟进', 'chatbot 成本测算'];
+  for (const text of ['@chatbot', '@chatbot ', '@SDK 升级跟进？', 'SDK 升级跟进', '  ', '@a @b！', '@']) assert.equal(onlyNames(text, names), true, text);
+  for (const text of ['@chatbot 这件到哪了', '继续', '好', '@SDK 升级跟进 先停一下', 'SDK 升级跟进到哪了']) assert.equal(onlyNames(text, names), false, text);
   // Without the names, a name with a space leaves its second word.
-  assert.equal(onlyNames('@OpenCodex 跟进'), false);
+  assert.equal(onlyNames('@SDK 升级跟进'), false);
 });

@@ -10,7 +10,7 @@ const item = (path: string, extra: Partial<IndexItem> = {}): IndexItem => ({
 });
 
 test('the index is grouped by category in order, the user\'s entries first and then the newest; lines carry 你说的 or 没核实', () => {
-  const index = buildIndex('OpenCodex 跟进', [
+  const index = buildIndex('SDK 升级跟进', [
     item('坑/装完要重启.md', { description: '装进 profile 后要重启桌面端才生效', isVerified: false }),
     item('规则/差距报告格式.md', { description: '报告写到当前目录的 report.md，写完回复 REPORT_DONE', updated: T - DAY }),
     item('规则/按建议级别实现.md', { description: '按报告“建议”一节的级别做，独立 bundle，不改 DSH 核心', userOwned: true, updated: T - 5 * DAY, isVerified: false }),
@@ -19,7 +19,7 @@ test('the index is grouped by category in order, the user\'s entries first and t
     item('规则/更新的规则.md', { updated: T }),
   ]);
   assert.equal(index.text, [
-    '# OpenCodex 跟进 · 记忆索引',
+    '# SDK 升级跟进 · 记忆索引',
     GENERATED_NOTE,
     '',
     '## 规则 3',

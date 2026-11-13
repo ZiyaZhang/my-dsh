@@ -42,11 +42,11 @@ test('a matter\'s memory folder goes in its main workspace with its category fol
   if (git) execFileSync('git', ['init', '-q'], { cwd: workspace });
   const { store } = harness(t, data);
   await store.open();
-  await store.sync([{ matterId: 'm-1', name: 'OpenCodex 跟进', workspace }], () => []);
+  await store.sync([{ matterId: 'm-1', name: 'SDK 升级跟进', workspace }], () => []);
   const dir = join(workspace, '.my-dsh', 'm-1', 'memory');
   assert.equal(store.dirOf('m-1'), dir);
   assert.deepEqual((await readdir(dir)).sort(), ['MEMORY.md', '坑', '定下的', '没做完', '答过的', '规则'].sort());
-  assert.match(await readFile(join(dir, 'MEMORY.md'), 'utf8'), /^# OpenCodex 跟进 · 记忆索引\n<!-- my dsh 按各文件开头生成，改记忆请改那些文件 -->\n\n还没有记忆。\n$/);
+  assert.match(await readFile(join(dir, 'MEMORY.md'), 'utf8'), /^# SDK 升级跟进 · 记忆索引\n<!-- my dsh 按各文件开头生成，改记忆请改那些文件 -->\n\n还没有记忆。\n$/);
   if (git) {
     assert.match(await readFile(join(workspace, '.git', 'info', 'exclude'), 'utf8'), /\n\.my-dsh\/\n$/);
     assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: workspace, encoding: 'utf8' }), '');
@@ -104,7 +104,7 @@ test('notes.json\'s lines become files once, one per line in its category, the u
     note('n-2', 'trap', '报告会话的回复是空的时，要去看 report.md', 'dream'),
     note('n-3', 'trap', '报告会话的回复是空的时，要去看 report.md 第二节', 'dream'),
   ];
-  await store.sync([{ matterId: 'm-1', name: 'OpenCodex 跟进', workspace }], () => notes);
+  await store.sync([{ matterId: 'm-1', name: 'SDK 升级跟进', workspace }], () => notes);
   const scan = store.scanOf('m-1')!;
   assert.deepEqual(scan.entries.map(entry => entry.path).sort(), ['坑/报告会话的回复是空的时 2.md', '坑/报告会话的回复是空的时.md', '规则/发布前先在开发 profile 里装一遍.md'].sort());
   const mine = parseFrontmatter(scan.texts.get('规则/发布前先在开发 profile 里装一遍.md')!)!;
@@ -122,7 +122,7 @@ test('notes.json\'s lines become files once, one per line in its category, the u
   store.close();
   const again = harness(t, data);
   await again.store.open();
-  await again.store.sync([{ matterId: 'm-1', name: 'OpenCodex 跟进', workspace }], () => notes);
+  await again.store.sync([{ matterId: 'm-1', name: 'SDK 升级跟进', workspace }], () => notes);
   assert.equal(again.store.scanOf('m-1')!.entries.length, 3);
   again.store.close();
 });

@@ -118,9 +118,9 @@ test('a merge reads whole the files whose sources had new turns first, then the 
 });
 
 test('the prompts carry the matter, the memory and the turns; the merge also the index size and whether it is near the cap', () => {
-  const matter = { name: 'OpenCodex 跟进', goal: '挑功能做成插件', instructions: '不改核心' };
+  const matter = { name: 'SDK 升级跟进', goal: '挑功能做成插件', instructions: '不改核心' };
   const capture = capturePrompt(matter, '### 规则/a.md', '## 会话「报告」（id=s-1）\n用户：出报告');
-  assert.match(capture, /^事项：OpenCodex 跟进\n目标：挑功能做成插件\n指令：不改核心\n\n记忆：\n### 规则\/a\.md\n\n会话的新轮次：\n## 会话「报告」/);
+  assert.match(capture, /^事项：SDK 升级跟进\n目标：挑功能做成插件\n指令：不改核心\n\n记忆：\n### 规则\/a\.md\n\n会话的新轮次：\n## 会话「报告」/);
   const merge = mergePrompt(matter, '### 规则/a.md', '', { lines: 170, bytes: 14_000, nearCap: true });
   assert.match(merge, /现在的索引 170 行、13\.7 KB，快到上限了，这次要压回去。/);
   assert.match(merge, /上次合并以来的会话：\n（没有读到）$/);

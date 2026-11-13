@@ -28,7 +28,7 @@ test('回顾 opens the newest day, today or not, and folds the older days, until
 
 test('回顾 marks the sessions the tools put in a matter as dispatched, and no others', () => {
   const matters = [
-    matter('m-1', 'OpenCodex 跟进', [session('a', { by: 'mydsh' }), session('b', { by: 'manual' }), session('c')]),
+    matter('m-1', 'SDK 升级跟进', [session('a', { by: 'mydsh' }), session('b', { by: 'manual' }), session('c')]),
     matter('m-2', '方案', [session('d', { by: 'mydsh' }), session('e', { by: 'origin' })]),
   ];
   assert.deepEqual([...dispatchedSessions(matters)].sort(), ['a', 'd']);
@@ -143,7 +143,7 @@ const memory = (count: number): MemoryView => ({
 test('my dsh\'s head says the days, sessions, tokens and plugins the Host read in one sentence', () => {
   const snapshot: BoardSnapshot = {
     matters: [
-      matter('m-1', 'OpenCodex 跟进', [], { memory: memory(3) }),
+      matter('m-1', 'SDK 升级跟进', [], { memory: memory(3) }),
       matter('m-2', 'chatbot 成本测算', []),
       matter('m-3', '第二期', [], { archivedAt: '2026-11-02T00:00:00Z', memory: memory(5) }),
     ],
@@ -152,7 +152,7 @@ test('my dsh\'s head says the days, sessions, tokens and plugins the Host read i
       { day: '2026-11-09', daysAgo: 0, sessions: [session('a'), session('b', { state: 'running' }), session('c', { state: 'waiting' }), session('d')] },
       { day: '2026-11-08', daysAgo: 1, sessions: [session('e')] },
     ],
-    attention: [session('c', { state: 'waiting' }), { ...session('f', { state: 'failed' }), matter: { id: 'm-1', name: 'OpenCodex 跟进' } }],
+    attention: [session('c', { state: 'waiting' }), { ...session('f', { state: 'failed' }), matter: { id: 'm-1', name: 'SDK 升级跟进' } }],
     assistant: { sessionId: 's-mydsh', cards: [] }, workspaces: [], presets: [], now: NOW,
   };
   assert.deepEqual(homeStats(snapshot, NOW), []);
@@ -170,13 +170,13 @@ test('my dsh\'s head says the days, sessions, tokens and plugins the Host read i
 });
 
 test('a matter\'s head counts its sessions, archived ones left out, and its memory entries', () => {
-  assert.deepEqual(matterCounts(matter('m-1', 'OpenCodex 跟进', [session('a'), session('b', { archived: true }), session('c', { state: 'running' })], { memory: memory(11) })),
+  assert.deepEqual(matterCounts(matter('m-1', 'SDK 升级跟进', [session('a'), session('b', { archived: true }), session('c', { state: 'running' })], { memory: memory(11) })),
     { sessions: 2, memory: 11 });
   assert.deepEqual(matterCounts(matter('m-2', '方案', [])), { sessions: 0, memory: 0 });
 });
 
 test('the card under my dsh\'s input lists what waits for an approval or an answer, then what failed, each in 待处理\'s order', () => {
-  const opencodex = { id: 'm-1', name: 'OpenCodex 跟进' };
+  const opencodex = { id: 'm-1', name: 'SDK 升级跟进' };
   const attention: ReviewSession[] = [
     { ...session('f-1', { title: '构建', state: 'failed' }), matter: opencodex },
     session('q-1', { title: '年度成本与新方案', state: 'waiting', wait: 'question' }),
@@ -194,7 +194,7 @@ test('the card under my dsh\'s input lists what waits for an approval or an answ
 });
 
 test('a matter\'s context rows say the first line of its instructions and how many sources, memory entries and written files it has', () => {
-  const full = matter('m-1', 'OpenCodex 跟进', [], {
+  const full = matter('m-1', 'SDK 升级跟进', [], {
     instructions: '\n  只做不改 DSH 核心的功能；每个功能做成独立插件\n挑值得做的', sources: [{ kind: 'folder', value: '/w/reports' }, { kind: 'link', value: 'https://example.com' }],
     memory: { ...memory(11), mergedAt: '2026-11-09T01:29:00Z' },
     artifacts: [
@@ -231,15 +231,15 @@ test('the card puts the suggestions of automatic grouping after what needs the u
       id: 'g-1', kind: 'new', name: 'chatbot 成本测算', goal: '算清年成本', why: '三条开在同一个工作区，都在算 chatbot 的成本',
       sessions: [{ id: 'a', title: '年度成本与新方案', lastActivity: NOW }, { id: 'b', title: 'chatbot 年成本测算表', lastActivity: NOW }, { id: 'c', title: '成本模型改用分档价格', lastActivity: NOW }],
     },
-    { id: 'g-2', kind: 'file', matter: { id: 'm-1', name: 'OpenCodex 跟进' }, sessions: [{ id: 'd', title: '回一句收到', lastActivity: NOW }], why: '@ 了「OpenCodex 跟进」里的会话' },
+    { id: 'g-2', kind: 'file', matter: { id: 'm-1', name: 'SDK 升级跟进' }, sessions: [{ id: 'd', title: '回一句收到', lastActivity: NOW }], why: '@ 了「SDK 升级跟进」里的会话' },
   ];
   const rows = homeCardRows(attention, suggestions);
   assert.deepEqual(rows.map(row => [row.kind, row.id]), [['waiting', 'q-1'], ['waiting', 'f-1'], ['suggestion', 'g-1'], ['suggestion', 'g-2']]);
   assert.deepEqual(rows.flatMap(row => (row.kind === 'suggestion' ? [[row.text, row.note]] : [])), [
-    ['建事项「chatbot 成本测算」', '3 个会话'], ['「回一句收到」归进 OpenCodex 跟进', undefined],
+    ['建事项「chatbot 成本测算」', '3 个会话'], ['「回一句收到」归进 SDK 升级跟进', undefined],
   ]);
   assert.equal(suggestionTitle(suggestions[0]!), '建事项「chatbot 成本测算」');
-  assert.equal(suggestionTitle(suggestions[1]!), '「回一句收到」归进「OpenCodex 跟进」');
+  assert.equal(suggestionTitle(suggestions[1]!), '「回一句收到」归进「SDK 升级跟进」');
   const folded = foldHomeCard(rows);
   assert.deepEqual([folded.shown.map(row => row.id), folded.rest.map(row => row.id)], [['q-1', 'f-1', 'g-1'], ['g-2']]);
   assert.deepEqual(foldHomeCard(rows.slice(0, HOME_CARD_SHOWN)).rest, []);

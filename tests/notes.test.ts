@@ -9,9 +9,9 @@ import { NoteStore, matterContext, noteText } from '../src/host/notes.ts';
 const at = '2026-11-10T08:00:00.000Z';
 
 test('matterContext gives a session in a matter its goal, instructions and sources, then the memory block', () => {
-  const matter = { name: 'OpenCodex 跟进', goal: '挑功能做成插件', instructions: '不改核心', sources: [{ kind: 'link', value: 'https://example.com/r', title: 'releases' }] };
+  const matter = { name: 'SDK 升级跟进', goal: '挑功能做成插件', instructions: '不改核心', sources: [{ kind: 'link', value: 'https://example.com/r', title: 'releases' }] };
   assert.deepEqual(matterContext(matter, '这件事的记忆在 /w/.my-dsh/m-1/memory/：……').split('\n'), [
-    '这条会话属于事项「OpenCodex 跟进」。',
+    '这条会话属于事项「SDK 升级跟进」。',
     '目标：挑功能做成插件',
     '指令：不改核心',
     '来源：releases（https://example.com/r）',

@@ -5,7 +5,7 @@ import {
 } from '../src/host/grouping-model.ts';
 
 const INPUT: GroupingInput = {
-  matters: [{ id: 'm-1', name: 'OpenCodex 跟进', goal: '跟上游每个版本' }, { id: 'm-2', name: '周报', goal: '' }],
+  matters: [{ id: 'm-1', name: 'SDK 升级跟进', goal: '跟上游每个版本' }, { id: 'm-2', name: '周报', goal: '' }],
   sessions: [
     { id: 's-1', title: 'chatbot 年成本测算表', firstPrompt: '算一下 chatbot 一年要花多少', folder: 'untitled folder', trigger: '用户' },
     { id: 's-2', title: '成本模型改用分档价格', lastReply: '改成分档以后年成本降了三成', prs: ['a/b#12'] },
@@ -18,7 +18,7 @@ test('the prompt lists the matters in progress and the loose sessions, one JSON 
   const prompt = groupingPrompt(INPUT);
   assert.equal(prompt, [
     '进行中的事项：',
-    '{"id":"m-1","name":"OpenCodex 跟进","goal":"跟上游每个版本"}',
+    '{"id":"m-1","name":"SDK 升级跟进","goal":"跟上游每个版本"}',
     '{"id":"m-2","name":"周报"}',
     '',
     '不在事项里的会话，最近用过的在前：',

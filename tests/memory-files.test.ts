@@ -9,7 +9,7 @@ const FILE = [
   '---',
   'name: 差距报告格式',
   'description: 报告写到当前目录的 report.md，写完回复 REPORT_DONE',
-  'by: 会话「OpenCodex 报告 · 0.163」',
+  'by: 会话「版本报告 · 0.163」',
   'sources: [session-04cd, session-9f2a]',
   'verified: 是，0.163 和 0.164 两次都照这个交付',
   'updated: 2026-11-12',
@@ -31,7 +31,7 @@ test('the category folders are the five note kinds, in the index order', () => {
 test('the frontmatter reads fields, lists and the body', () => {
   const parsed = parseFrontmatter(FILE)!;
   assert.equal(parsed.fields.name, '差距报告格式');
-  assert.equal(parsed.fields.by, '会话「OpenCodex 报告 · 0.163」');
+  assert.equal(parsed.fields.by, '会话「版本报告 · 0.163」');
   assert.deepEqual(parsed.sources, ['session-04cd', 'session-9f2a']);
   assert.equal(parsed.fields.updated, '2026-11-12');
   assert.equal(parsed.body, '差距报告写到会话当前目录的 report.md，写完只回复 REPORT_DONE。\n\n为什么：报告页按这个文件名取报告。');
@@ -70,7 +70,7 @@ test('a checked file is an index entry with whether it is the user\'s and whethe
   assert.equal(entry.updated, Date.parse('2026-11-12'));
   assert.equal(entry.hash, contentHash(FILE));
   assert.deepEqual(entry.warnings, []);
-  const user = FILE.replace('by: 会话「OpenCodex 报告 · 0.163」', 'by: 你说的');
+  const user = FILE.replace('by: 会话「版本报告 · 0.163」', 'by: 你说的');
   const mine = checkMemoryFile('规则/a.md', user, info(user));
   assert.ok('entry' in mine && mine.entry.userOwned);
 });

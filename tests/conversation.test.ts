@@ -7,11 +7,11 @@ import { RequestError, type Matter } from '../src/host/remote.ts';
 
 const T0 = '2026-11-10T08:00:00.000Z';
 const matter: Matter = {
-  id: 'm-1', name: 'OpenCodex 跟进', goal: '挑功能做成插件', instructions: '不改核心', aliases: [], createdAt: T0, conversation: 's-talk',
+  id: 'm-1', name: 'SDK 升级跟进', goal: '挑功能做成插件', instructions: '不改核心', aliases: [], createdAt: T0, conversation: 's-talk',
   sources: [{ kind: 'link', value: 'https://example.com/r', title: 'releases' }],
   sessions: [{ sessionId: 's-report', by: 'mydsh', at: T0 }, { sessionId: 's-build', by: 'manual', at: T0 }, { sessionId: 's-ask', by: 'mydsh', at: T0 }],
 };
-const MEMORY = '这件事的记忆在 /w/.my-dsh/m-1/memory/：……\n\n# OpenCodex 跟进 · 记忆索引';
+const MEMORY = '这件事的记忆在 /w/.my-dsh/m-1/memory/：……\n\n# SDK 升级跟进 · 记忆索引';
 const sessions: ListedSession[] = [
   { id: 's-report', title: '出 0.163 的报告', state: 'idle', preview: { kind: 'reply', text: '报告写好了' }, by: 'mydsh' },
   { id: 's-build', title: '装开发 profile', state: 'running', preview: { kind: 'running', step: '运行命令 npm run check', since: 1_700_000_000_000 }, by: 'manual' },
@@ -21,7 +21,7 @@ const sessions: ListedSession[] = [
 test('a matter\'s conversation reads its rules, the matter\'s context, its memory and its live sessions, in that order', () => {
   const text = conversationContext(matter, sessions, undefined, MEMORY);
   assert.equal(text, [
-    conversationRules('OpenCodex 跟进'),
+    conversationRules('SDK 升级跟进'),
     '',
     '目标：挑功能做成插件',
     '指令：不改核心',
@@ -29,16 +29,16 @@ test('a matter\'s conversation reads its rules, the matter\'s context, its memor
     '',
     '这件事的记忆在 /w/.my-dsh/m-1/memory/：……',
     '',
-    '# OpenCodex 跟进 · 记忆索引',
+    '# SDK 升级跟进 · 记忆索引',
     '',
     '这件事里的会话（最急的在前）：',
     '- 定开关 · 在等你回答：先跟哪几个开关？ · 派出去的 · id=s-ask',
     '- 装开发 profile · 在跑：运行命令 npm run check · id=s-build',
     '- 出 0.163 的报告 · 空闲，最后的回复：报告写好了 · 派出去的 · id=s-report',
   ].join('\n'));
-  assert.match(text, /^这条会话是事项「OpenCodex 跟进」的对话。用户在这里交代和这件事有关的事。\n- 用户的话里没说要做什么、问什么，先问清楚，不要自己找活干。\n- 小事直接做。/);
+  assert.match(text, /^这条会话是事项「SDK 升级跟进」的对话。用户在这里交代和这件事有关的事。\n- 用户的话里没说要做什么、问什么，先问清楚，不要自己找活干。\n- 小事直接做。/);
   // Right after the line about dispatching: what comes back once the dispatched sessions stop.
-  const rules = conversationRules('OpenCodex 跟进').split('\n');
+  const rules = conversationRules('SDK 升级跟进').split('\n');
   assert.equal(rules[rules.findIndex(rule => rule.startsWith('- 派出去以后')) + 1],
     '- 你派出去的会话都停下后，会收到一条“派出去的会话有结果了”。那一轮只汇报，不开新会话，不发消息。');
   // The sessions' own matter line is left out: the rules already say which matter this is.
@@ -80,12 +80,12 @@ test('a matter\'s conversation acts on its own matter and its sessions only; my 
   assert.equal(matterFor(own, undefined), 'm-1');
   assert.equal(matterFor(own, ''), 'm-1');
   assert.equal(matterFor(own, 'm-1'), 'm-1');
-  refused(() => matterFor(own, 'm-2'), /只管事项「OpenCodex 跟进」/);
+  refused(() => matterFor(own, 'm-2'), /只管事项「SDK 升级跟进」/);
   assert.equal(matterFor(home, 'm-2'), 'm-2');
   refused(() => matterFor(home, undefined), /缺少 matterId/);
   refused(() => matterFor(home, ' '), /缺少 matterId/);
   assert.doesNotThrow(() => { checkReach(own, 's-build'); });
-  refused(() => { checkReach(own, 's-elsewhere'); }, /不在事项「OpenCodex 跟进」里/);
+  refused(() => { checkReach(own, 's-elsewhere'); }, /不在事项「SDK 升级跟进」里/);
   // The conversation is not one of the matter's sessions.
   refused(() => { checkReach(own, 's-talk'); }, /不在事项/);
   assert.doesNotThrow(() => { checkReach(home, 's-elsewhere'); });
@@ -112,11 +112,11 @@ test('a hosted matter\'s conversation reads which preset its sessions run under,
 });
 
 test('the conversation writes the user\'s standing words into the matter\'s memory, and changes a memory file when the user asks', () => {
-  const rules = conversationRules('OpenCodex 跟进').split('\n');
+  const rules = conversationRules('SDK 升级跟进').split('\n');
   assert.ok(rules.includes('- 用户说了以后都适用的要求或定下的事，用 note_matter 记进这件事的记忆。'));
   assert.ok(rules.includes('- 用户要改记忆里的某个文件（“改记忆「规则/某个文件.md」：……”），照用户的话改那个文件。'));
 });
 
 test('words the home passed on can name other matters; their part is not this conversation\'s work', () => {
-  assert.ok(conversationRules('OpenCodex 跟进').split('\n').includes('- 用户的话里要别的事项做的事不归你做，那些事项有各自的对话。'));
+  assert.ok(conversationRules('SDK 升级跟进').split('\n').includes('- 用户的话里要别的事项做的事不归你做，那些事项有各自的对话。'));
 });
