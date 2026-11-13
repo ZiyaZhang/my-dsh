@@ -1374,6 +1374,7 @@ export default class MyDsh extends TypertRemoteService {
     return {
       ...snapshot,
       usage,
+      activity: this.assistant.peek().activity.length,
       matters: snapshot.matters.map((matter) => {
         const memory = this.memoryView(matter.id);
         const stored = own.get(matter.id);

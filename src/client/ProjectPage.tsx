@@ -131,7 +131,7 @@ export function HomeBoard({ snapshot, now, dialogs, openSession, openMatter, wai
   return (
     <>
       {waiting.length > 0 && <WaitingSection rows={waiting} now={now} open={(row) => { openSession(row.id); }} />}
-      <section className="mydsh-pj-section" data-mydsh-section="matters">
+      <section className="mydsh-pj-section">
         <div className="mydsh-pj-section-head">
           <h2>事项<span className="mydsh-count">{active.length}</span></h2>
           <button type="button" className="mydsh-pj-new" onClick={() => { dialogs.open({ kind: 'create' }); }}><IconPlusOutlineRegular size={14} />新建事项</button>

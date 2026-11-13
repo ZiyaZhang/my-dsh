@@ -450,7 +450,7 @@ function ArchivedMatters({ matters, now, openMatter }: { matters: BoardMatter[];
 }
 
 /**
- * 回顾: a card per day, today open and the older days folded to how many sessions they had. An entry per session, opening it: its time,
+ * 回顾: a card per day, the newest open and the older days folded to how many sessions they had. An entry per session, opening it: its time,
  * its state's dot on the day's line, its title, what it did (its newest reply as the board has it), and chips for its matter, whether a
  * matter's conversation dispatched it, and its workspace.
  * @param dispatched - the sessions a matter's conversation or my dsh dispatched.
@@ -465,8 +465,8 @@ export function Review({ days, now, dispatched, openSession }: {
   if (days.length === 0) return <p className="mydsh-empty">无</p>;
   return (
     <div className="mydsh-rv">
-      {days.map((day) => {
-        const open = dayOpen(day, toggled);
+      {days.map((day, index) => {
+        const open = dayOpen(day, index, toggled);
         const title = dayTitle(day, now);
         return (
           <section key={day.day} className={`mydsh-rv-day${open ? ' is-open' : ''}`}>

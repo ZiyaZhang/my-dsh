@@ -490,16 +490,15 @@ a.mydsh-chip-body:hover .mydsh-chip-label { text-decoration: underline dotted; }
 .mydsh-mn-context-text b { margin-right: 6px; font-weight: 500; color: var(--dsw-alias-label-primary); }
 .mydsh-mn-context .mydsh-link { align-self: flex-start; font-size: 12px; }
 
-/* Layout `tabs`, for my dsh's page and a matter's: the page head and the tab row (看板 | 对话) over the board or the conversation. The head
-   is a 48px tile (the whale on my dsh's blue, a folder on a matter's grey), the name at 20px over one line of numbers in bold primary
-   ink, and the tools at the right. A matter's name has ‹ my dsh above it and the 托管 chip at the right; its line starts with the goal,
-   which gives way first when the line is short of room. */
+/* Layout `tabs`, for my dsh's page and a matter's: the page head and the tab row (看板 | 对话, and at its right end what the page puts
+   there) over the board or the conversation. my dsh's head is the banner below. A matter's head is a 48px folder tile on grey, the name
+   at 20px over one line of numbers in bold primary ink, and the tools at the right; the name has ‹ my dsh above it and the 托管 chip at
+   the right, and the line starts with the goal, which gives way first when the line is short of room. */
 .mydsh-page.is-main > .mydsh-tb { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .mydsh-tb-head { flex: none; padding: 20px 24px 0; border-bottom: .5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); }
 [data-platform='darwin'] .mydsh-tb-head { padding-top: calc(20px + var(--dsh-frame-top-clearance, 0px)); }
 .mydsh-hd { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .mydsh-hd-tile { display: grid; flex: none; place-items: center; width: 48px; height: 48px; border-radius: 16px; }
-.mydsh-hd-tile.is-mydsh { background: var(--dsw-specific-bubble); color: var(--dsw-alias-state-business-primary); }
 .mydsh-hd-tile.is-matter { background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-secondary); }
 .mydsh-hd-text { flex: 1; min-width: 0; }
 .mydsh-hd-title { display: flex; align-items: baseline; min-width: 0; }
@@ -510,14 +509,14 @@ a.mydsh-chip-body:hover .mydsh-chip-label { text-decoration: underline dotted; }
 .mydsh-hd-line b { margin: 0 2px; font-weight: 600; color: var(--dsw-alias-label-primary); font-variant-numeric: tabular-nums; }
 .mydsh-hd-line b.is-warn { color: var(--dsw-alias-state-warn-label); }
 .mydsh-hd-line i { margin: 0 6px; font-style: normal; color: var(--dsw-alias-label-caption); }
-.mydsh-hd-jump { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
-.mydsh-hd-jump:hover { color: var(--dsw-alias-label-secondary); }
 .mydsh-hd-tools { display: inline-flex; flex: none; align-self: flex-start; align-items: center; gap: 4px; padding-top: 4px; }
 .mydsh-hd-tools.is-middle { align-self: center; padding-top: 0; }
 .mydsh-hd-tools > .mydsh-link { font-size: 13px; }
 .mydsh-hd-back { display: inline-flex; align-items: center; gap: 2px; margin: 0 0 6px -4px; padding: 0 4px; border: 0; border-radius: var(--dsw-radius-xs); background: none; font: inherit; font-size: 12.5px; line-height: 20px; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 .mydsh-hd-back:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
-.mydsh-tb-tabs { display: flex; gap: 24px; margin-top: 12px; }
+.mydsh-tb-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.mydsh-tb-row > .mydsh-link { font-size: 13px; }
+.mydsh-tb-tabs { display: flex; gap: 24px; }
 .mydsh-tb-tabs button { position: relative; height: 38px; padding: 0 2px; border: 0; background: none; font: inherit; font-size: 14px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .mydsh-tb-tabs button:hover { color: var(--dsw-alias-label-primary); }
 .mydsh-tb-tabs button.is-active { font-weight: 500; color: var(--dsw-alias-state-business-primary); }
@@ -527,6 +526,27 @@ a.mydsh-chip-body:hover .mydsh-chip-label { text-decoration: underline dotted; }
 .mydsh-tb-board[hidden], .mydsh-tb-chat[hidden] { display: none; }
 .mydsh-tb-chat { display: flex; flex: 1 1 0; min-height: 0; }
 .mydsh-hd-stat { display: inline-flex; align-items: baseline; }
+
+/* my dsh's banner: a pale blue band, 116px or taller, with the name in Instrument Serif italic over the sentence of numbers, the numbers
+   in its upright digits, and the whale at its laptop on the band's right, cut by its lower edge. In a band narrower than 720px the whale
+   gives way and the sentence takes the band's width. The band is its own size container, so the head stays out of containment. */
+.mydsh-tb-head:has(> .mydsh-hb) { padding-top: 16px; }
+[data-platform='darwin'] .mydsh-tb-head:has(> .mydsh-hb) { padding-top: calc(16px + var(--dsh-frame-top-clearance, 0px)); }
+.mydsh-tb-head:has(> .mydsh-hb) > .mydsh-tb-row { margin-top: 6px; }
+.mydsh-hb { position: relative; box-sizing: border-box; min-height: 116px; padding: 18px 26px; overflow: hidden; border-radius: 20px; container-type: inline-size; background: linear-gradient(100deg, #F6F7FF 0%, #EEF1FF 55%, #E2E8FF 100%); box-shadow: inset 0 0 0 .5px rgba(77, 107, 254, .16); }
+.mydsh-hb-text { position: relative; z-index: 1; min-width: 0; padding-right: 164px; }
+.mydsh-hb h1 { font-family: 'mydsh-serif', Georgia, serif; font-style: italic; font-weight: 400; font-size: 44px; line-height: 46px; letter-spacing: -.01em; color: #131D8B; }
+.mydsh-hb-line { min-height: 26px; margin-top: 8px; font-size: 13.5px; line-height: 26px; color: var(--dsw-alias-label-secondary); }
+.mydsh-hb-line b { margin: 0 4px 0 5px; font-family: 'mydsh-serif', Georgia, serif; font-weight: 400; font-size: 23px; color: #4D6BFE; }
+.mydsh-hb-whale { position: absolute; right: 22px; bottom: -8px; height: 112px; pointer-events: none; user-select: none; }
+/* The query measures the band's content box: 720px less its 26px sides. */
+@container (max-width: 667px) {
+  .mydsh-hb-whale { display: none; }
+  .mydsh-hb-text { padding-right: 0; }
+}
+body[data-ds-dark-theme] .mydsh-hb { background: linear-gradient(100deg, rgba(77, 107, 254, .08) 0%, rgba(77, 107, 254, .14) 55%, rgba(77, 107, 254, .22) 100%); box-shadow: inset 0 0 0 .5px rgba(132, 153, 255, .24); }
+body[data-ds-dark-theme] .mydsh-hb h1 { color: #C9D1FF; }
+body[data-ds-dark-theme] .mydsh-hb-line b { color: #8EA0FF; }
 
 /* 对话: the conversation and its column. The column's left edge is an 8px strip centred on its border that turns DSH's blue while hovered,
    focused or dragged; its head is the column's name with 整页看 and the button that puts it away, which then sits at the conversation's

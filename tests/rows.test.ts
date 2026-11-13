@@ -17,12 +17,13 @@ const matter = (id: string, name: string, sessions: BoardSession[], overrides: P
   lastActivity: sessions[0]?.lastActivity ?? Date.parse('2026-11-01T00:00:00Z'), ...overrides,
 });
 
-test('回顾 opens 今天 and folds the older days, until the user toggles a day', () => {
-  assert.equal(dayOpen({ day: '2026-11-09', daysAgo: 0 }, {}), true);
-  assert.equal(dayOpen({ day: '2026-11-08', daysAgo: 1 }, {}), false);
-  assert.equal(dayOpen({ day: '2026-11-06', daysAgo: 3 }, {}), false);
-  assert.equal(dayOpen({ day: '2026-11-09', daysAgo: 0 }, { '2026-11-09': false }), false);
-  assert.equal(dayOpen({ day: '2026-11-06', daysAgo: 3 }, { '2026-11-06': true }), true);
+test('回顾 opens the newest day, today or not, and folds the older days, until the user toggles a day', () => {
+  assert.equal(dayOpen({ day: '2026-11-09' }, 0, {}), true);
+  assert.equal(dayOpen({ day: '2026-11-08' }, 1, {}), false);
+  assert.equal(dayOpen({ day: '2026-11-03' }, 0, {}), true);
+  assert.equal(dayOpen({ day: '2026-11-06' }, 3, {}), false);
+  assert.equal(dayOpen({ day: '2026-11-09' }, 0, { '2026-11-09': false }), false);
+  assert.equal(dayOpen({ day: '2026-11-06' }, 3, { '2026-11-06': true }), true);
 });
 
 test('回顾 marks the sessions the tools put in a matter as dispatched, and no others', () => {
@@ -139,7 +140,7 @@ const memory = (count: number): MemoryView => ({
   rows: Array.from({ length: count }, (_, index) => ({ path: `规则/${index}.md`, category: '规则', description: `第 ${index} 条` })),
 });
 
-test('my dsh\'s head shows the days, tokens and plugins the Host read, then the matters in progress', () => {
+test('my dsh\'s head says the days, sessions, tokens and plugins the Host read in one sentence', () => {
   const snapshot: BoardSnapshot = {
     matters: [
       matter('m-1', 'OpenCodex 跟进', [], { memory: memory(3) }),
@@ -154,14 +155,16 @@ test('my dsh\'s head shows the days, tokens and plugins the Host read, then the 
     attention: [session('c', { state: 'waiting' }), { ...session('f', { state: 'failed' }), matter: { id: 'm-1', name: 'OpenCodex 跟进' } }],
     assistant: { sessionId: 's-mydsh', cards: [] }, workspaces: [], presets: [], now: NOW,
   };
-  assert.deepEqual(homeStats(snapshot, NOW), [{ key: 'matters', value: '2', after: '个事项' }]);
+  assert.deepEqual(homeStats(snapshot, NOW), []);
   const used = homeStats({ ...snapshot, usage: { firstSessionAt: NOW - 3 * 86_400_000, sessions: 329, tokens: 123_456_789, tokenSessions: 329, plugins: 5 } }, NOW);
-  assert.deepEqual(used.map(stat => [stat.key, stat.before ?? '', stat.value, stat.after]), [
-    ['days', '用了', '4', '天'], ['sessions', '', '329', '个会话'], ['tokens', '', '1.23 亿', 'token'], ['plugins', '', '5', '个插件'], ['matters', '', '2', '个事项'],
+  assert.deepEqual(used.map(stat => [stat.key, stat.before, stat.value, stat.after]), [
+    ['days', '你已使用 dsh', '4', '天'], ['sessions', '开启', '329', '个 session'], ['tokens', '用过', '1.23', '亿 token'], ['plugins', '安装', '5', '个插件'],
   ]);
+  const few = homeStats({ ...snapshot, usage: { sessions: 2, tokens: 9_999, tokenSessions: 2 } }, NOW).find(stat => stat.key === 'tokens')!;
+  assert.deepEqual([few.value, few.after], ['9,999', 'token']);
   assert.equal(used[2]!.title, '所有会话共 123,456,789 token，不含子智能体');
   const partial = homeStats({ ...snapshot, usage: { sessions: 329, tokens: 98_765_432, tokenSessions: 105 } }, NOW).find(stat => stat.key === 'tokens')!;
-  assert.equal(partial.before, '至少');
+  assert.equal(partial.before, '用过');
   assert.equal(partial.title, '105 个会话有用量记录，共 98,765,432 token；另有 224 个会话（旧格式或分叉出来的）没有算进来');
   assert.equal(homeStats({ ...snapshot, usage: { sessions: 3, tokens: 0, tokenSessions: 0 } }, NOW).some(stat => stat.key === 'tokens'), false);
 });

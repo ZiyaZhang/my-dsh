@@ -13,6 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SessionId } from '@deepseek-ai/dsh-session';
 import { MY_DSH_REMOTE, type MyDshRequest, type MyDshResult, type UploadSource } from '../host/remote.js';
+import { ART_FACES } from './art.js';
 import { openAssistant } from './assistant.js';
 import { BoardPage } from './BoardPage.js';
 import { BoardSource } from './board-source.js';
@@ -45,7 +46,7 @@ export async function apply(ctx: Context): Promise<void> {
   ctx.effect(() => unmount, 'my-dsh: remote');
   ctx.effect(() => {
     const style = document.createElement('style');
-    style.dataset.myDsh = 'styles'; style.textContent = styles;
+    style.dataset.myDsh = 'styles'; style.textContent = `${ART_FACES}\n${styles}`;
     document.head.append(style);
     return () => style.remove();
   }, 'my-dsh: styles');

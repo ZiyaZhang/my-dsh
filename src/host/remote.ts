@@ -255,6 +255,8 @@ export interface BoardSnapshot {
   recentWorkspaceId?: string;
   /** Numbers about the user's DSH as a whole, for my dsh's head. */
   usage?: UsageStats;
+  /** How many entries 做事记录 has; my dsh's head links to it once there is one. */
+  activity?: number;
   /** Pending suggestions of automatic grouping whose sessions are all still loose, new matters first; absent while there are none. */
   suggestions?: SuggestionView[];
   /** Host time the snapshot was taken, epoch ms. */

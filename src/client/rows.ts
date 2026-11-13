@@ -17,9 +17,9 @@ export function lineOf(session: BoardSession, now: number): string {
   return '';
 }
 
-/** 今天 starts open and older days folded; a day the user toggled keeps the user's choice. */
-export function dayOpen(day: { day: string; daysAgo: number }, toggled: Readonly<Record<string, boolean>>): boolean {
-  return toggled[day.day] ?? day.daysAgo === 0;
+/** The newest day (`index` 0) starts open and the older days folded; a day the user toggled keeps the user's choice. */
+export function dayOpen(day: { day: string }, index: number, toggled: Readonly<Record<string, boolean>>): boolean {
+  return toggled[day.day] ?? index === 0;
 }
 
 /** The sessions a matter's conversation, or my dsh, dispatched: those its tools put in the matter. */
@@ -134,11 +134,10 @@ export function forwardState(conversation: ConversationView | undefined, asking:
   return { kind: 'queued' };
 }
 
-/** The numbers under my dsh's name. */
-/** One number under my dsh's name: `before`, the number in bold, `after`; `title` gives the exact figure or what it counts. */
+/** One part of the sentence under my dsh's name: `before`, the number in bold, `after`; `title` gives the exact figure or what it counts. */
 export interface HomeStat {
-  key: 'days' | 'sessions' | 'tokens' | 'plugins' | 'matters';
-  before?: string;
+  key: 'days' | 'sessions' | 'tokens' | 'plugins';
+  before: string;
   value: string;
   after: string;
   title?: string;
@@ -163,8 +162,9 @@ export function tokenText(tokens: number): string {
 }
 
 /**
- * The numbers under my dsh's name: how long DSH has been in use, its sessions, their tokens (至少 when the sum covers fewer sessions
- * than there are), the installed plugins, and the matters in progress. A number the Host could not read is left out.
+ * The sentence under my dsh's name, 你已使用 dsh N 天，开启 N 个 session，用过 N token，安装 N 个插件: how long DSH has been in use, its
+ * sessions, their tokens, and the installed plugins. A number the Host could not read is left out. The tokens are those of the
+ * sessions with a usage record; the title says how many sessions have none.
  */
 export function homeStats(snapshot: BoardSnapshot, now: number): HomeStat[] {
   const usage = snapshot.usage ?? {};
@@ -172,23 +172,24 @@ export function homeStats(snapshot: BoardSnapshot, now: number): HomeStat[] {
   if (usage.firstSessionAt !== undefined) {
     const first = new Date(usage.firstSessionAt);
     stats.push({
-      key: 'days', before: '用了', value: String(daysUsed(usage.firstSessionAt, now)), after: '天',
+      key: 'days', before: '你已使用 dsh', value: String(daysUsed(usage.firstSessionAt, now)), after: '天',
       title: `第一个会话在 ${first.getFullYear()}年${first.getMonth() + 1}月${first.getDate()}日`,
     });
   }
-  if (usage.sessions !== undefined) stats.push({ key: 'sessions', value: String(usage.sessions), after: '个会话', title: '不含子智能体和没说过话的会话' });
+  if (usage.sessions !== undefined) stats.push({ key: 'sessions', before: '开启', value: String(usage.sessions), after: '个 session', title: '不含子智能体和没说过话的会话' });
   if (usage.tokens !== undefined && usage.tokenSessions) {
     const exact = usage.tokens.toLocaleString('en-US');
     const missing = usage.sessions !== undefined ? usage.sessions - usage.tokenSessions : 0;
+    // The number alone is set large; 万 or 亿 goes with the words after it.
+    const [count = '', unit] = tokenText(usage.tokens).split(' ');
     stats.push({
-      key: 'tokens', ...(missing > 0 ? { before: '至少' } : {}), value: tokenText(usage.tokens), after: 'token',
+      key: 'tokens', before: '用过', value: count, after: unit ? `${unit} token` : 'token',
       title: missing > 0
         ? `${usage.tokenSessions} 个会话有用量记录，共 ${exact} token；另有 ${missing} 个会话（旧格式或分叉出来的）没有算进来`
         : `所有会话共 ${exact} token，不含子智能体`,
     });
   }
-  if (usage.plugins !== undefined) stats.push({ key: 'plugins', value: String(usage.plugins), after: '个插件', title: '插件页“已安装插件”里的插件' });
-  stats.push({ key: 'matters', value: String(snapshot.matters.filter(matter => !matter.archivedAt).length), after: '个事项' });
+  if (usage.plugins !== undefined) stats.push({ key: 'plugins', before: '安装', value: String(usage.plugins), after: '个插件', title: '插件页“已安装插件”里的插件' });
   return stats;
 }
 
